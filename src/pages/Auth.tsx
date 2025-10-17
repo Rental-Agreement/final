@@ -1,20 +1,232 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [role, setRole] = useState<"Tenant" | "Owner" | "Admin">("Tenant");
+  
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Authentication logic will be implemented here
-    setTimeout(() => setIsLoading(false), 1000);
+
+    try {
+      // Sign in with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
+
+      if (authError) {
+        // Handle email confirmation error specifically
+        if (authError.message?.includes("Email not confirmed")) {
+          toast({
+            title: "Email Confirmation Required",
+            description: "Please ask admin to disable email confirmation in Supabase Dashboard: Authentication → Providers → Email → Disable 'Confirm email'",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+        throw new Error(authError.message);
+      }
+
+      if (!authData.user) {
+        throw new Error("Login failed. Please try again.");
+      }
+
+      // Get user profile from database
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("auth_user_id", authData.user.id)
+        .single() as any;
+
+      if (userError || !userData) {
+        console.error("User profile error:", userError);
+        throw new Error("Failed to load user profile. Please contact support.");
+      }
+
+      // Check if account is approved (except for Admin)
+      if (!userData.is_approved && userData.role !== "Admin") {
+        toast({
+          title: "Account Pending Approval",
+          description: userData.role === "Owner" 
+            ? "Your owner account is waiting for admin approval. You'll be notified via email once approved."
+            : "Your account is waiting for approval.",
+          variant: "destructive",
+        });
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // Show success message
+      toast({
+        title: "Login Successful! 🎉",
+        description: `Welcome back, ${userData.first_name} ${userData.last_name}!`,
+      });
+
+      // Navigate based on role
+      switch (userData.role) {
+        case "Admin":
+          navigate("/admin");
+          break;
+        case "Owner":
+          navigate("/owner");
+          break;
+        case "Tenant":
+          navigate("/tenant");
+          break;
+        default:
+          navigate("/");
+      }
+    } catch (error: any) {
+      console.error("Login error:", error);
+      
+      // Provide helpful error messages
+      let errorMessage = "Invalid email or password. Please try again.";
+      
+      if (error.message?.includes("invalid_credentials") || error.message?.includes("Invalid login")) {
+        errorMessage = "Invalid email or password. If you haven't registered yet, please sign up first!";
+      } else if (error.message?.includes("User not found")) {
+        errorMessage = "No account found with this email. Please sign up first!";
+      }
+      
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation
+    if (!firstName.trim() || !lastName.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please provide your first and last name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (registerPassword.length < 6) {
+      toast({
+        title: "Weak Password",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Create auth user (without email confirmation)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: registerEmail,
+        password: registerPassword,
+        options: {
+          emailRedirectTo: undefined, // Disable email confirmation
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            role: role,
+          }
+        }
+      });
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("Registration failed");
+
+      // Create user profile in database
+      // Try different column names based on what your schema might have
+      const profileData: any = {
+        email: registerEmail,
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phoneNumber || null,
+        role: role,
+        is_approved: role === "Tenant", // Auto-approve tenants
+      };
+
+      // Try to add auth user ID with different possible column names
+      // Your schema might use one of these:
+      profileData.auth_user_id = authData.user.id;  // Most common
+      // profileData.user_id = authData.user.id;       // Alternative
+      // profileData.auth_user_id = authData.user.id;       // Alternative
+      // profileData.id = authData.user.i//d;            // Alternative
+
+      const { error: profileError } = await supabase
+        .from("users")
+        .insert([profileData] as any);
+
+      if (profileError) {
+        console.error("Profile creation failed:", profileError);
+        
+        // Check if it's a schema mismatch error
+        if (profileError.message?.includes("auth_user_id") || 
+            profileError.message?.includes("schema cache") ||
+            profileError.code === 'PGRST204') {
+          throw new Error(
+            "Database schema mismatch detected. Please check DATABASE_SCHEMA_FIX.md for instructions."
+          );
+        }
+        
+        throw new Error("Failed to create user profile. Please try again.");
+      }
+
+      toast({
+        title: "Registration Successful! 🎉",
+        description: role === "Tenant" 
+          ? "You can now log in with your credentials!"
+          : "Your account is pending admin approval. You'll be notified once approved.",
+      });
+
+      // Clear form and switch to login tab
+      setLoginEmail(registerEmail);
+      setRegisterEmail("");
+      setRegisterPassword("");
+      setFirstName("");
+      setLastName("");
+      setPhoneNumber("");
+      setRole("Tenant");
+      
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      toast({
+        title: "Registration Failed",
+        description: error.message || "An error occurred during registration.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -41,13 +253,18 @@ const Auth = () => {
               </TabsList>
 
               <TabsContent value="signin">
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="text-sm text-muted-foreground mb-4 p-3 bg-muted rounded-md">
+                    💡 Don't have an account? Switch to the <strong>Sign Up</strong> tab first!
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="signin-email">Email</Label>
                     <Input
                       id="signin-email"
                       type="email"
                       placeholder="your@email.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
                       required
                     />
                   </div>
@@ -57,6 +274,8 @@ const Auth = () => {
                       id="signin-password"
                       type="password"
                       placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
                       required
                     />
                   </div>
@@ -67,15 +286,26 @@ const Auth = () => {
               </TabsContent>
 
               <TabsContent value="signup">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      placeholder="John Doe"
-                      required
-                    />
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="first-name">First Name</Label>
+                      <Input
+                        id="first-name"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="last-name">Last Name</Label>
+                      <Input
+                        id="last-name"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
@@ -83,8 +313,31 @@ const Auth = () => {
                       id="signup-email"
                       type="email"
                       placeholder="your@email.com"
+                      value={registerEmail}
+                      onChange={(e) => setRegisterEmail(e.target.value)}
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-role">I am a</Label>
+                    <Select value={role} onValueChange={(value: any) => setRole(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Tenant">Tenant</SelectItem>
+                        <SelectItem value="Owner">Property Owner</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
@@ -92,20 +345,10 @@ const Auth = () => {
                       id="signup-password"
                       type="password"
                       placeholder="••••••••"
+                      value={registerPassword}
+                      onChange={(e) => setRegisterPassword(e.target.value)}
                       required
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-role">I am a</Label>
-                    <select
-                      id="signup-role"
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                      required
-                    >
-                      <option value="">Select role...</option>
-                      <option value="tenant">Tenant</option>
-                      <option value="owner">Property Owner</option>
-                    </select>
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Creating account..." : "Create Account"}

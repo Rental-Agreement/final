@@ -7,14 +7,335 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
-  }
   public: {
     Tables: {
-      [_ in never]: never
+      users: {
+        Row: {
+          user_id: string
+          first_name: string
+          last_name: string
+          email: string
+          phone_number: string | null
+          role: 'Admin' | 'Owner' | 'Tenant'
+          is_approved: boolean
+          auth_user_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id?: string
+          first_name: string
+          last_name: string
+          email: string
+          phone_number?: string | null
+          role: 'Admin' | 'Owner' | 'Tenant'
+          is_approved?: boolean
+          auth_user_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          first_name?: string
+          last_name?: string
+          email?: string
+          phone_number?: string | null
+          role?: 'Admin' | 'Owner' | 'Tenant'
+          is_approved?: boolean
+          auth_user_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      properties: {
+        Row: {
+          property_id: string
+          owner_id: string
+          address_line_1: string
+          city: string
+          state: string
+          zip_code: string
+          type: string | null
+          is_approved: boolean
+          status: 'Available' | 'Occupied'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          property_id?: string
+          owner_id: string
+          address_line_1: string
+          city: string
+          state: string
+          zip_code: string
+          type?: string | null
+          is_approved?: boolean
+          status?: 'Available' | 'Occupied'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          property_id?: string
+          owner_id?: string
+          address_line_1?: string
+          city?: string
+          state?: string
+          zip_code?: string
+          type?: string | null
+          is_approved?: boolean
+          status?: 'Available' | 'Occupied'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      rooms: {
+        Row: {
+          room_id: string
+          property_id: string
+          room_number: string
+          rent_price: number
+          description: string | null
+          status: 'Available' | 'Occupied'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          room_id?: string
+          property_id: string
+          room_number: string
+          rent_price: number
+          description?: string | null
+          status?: 'Available' | 'Occupied'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          room_id?: string
+          property_id?: string
+          room_number?: string
+          rent_price?: number
+          description?: string | null
+          status?: 'Available' | 'Occupied'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      beds: {
+        Row: {
+          bed_id: string
+          room_id: string
+          bed_name: string
+          status: 'Available' | 'Occupied'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          bed_id?: string
+          room_id: string
+          bed_name: string
+          status?: 'Available' | 'Occupied'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          bed_id?: string
+          room_id?: string
+          bed_name?: string
+          status?: 'Available' | 'Occupied'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      leases: {
+        Row: {
+          lease_id: string
+          tenant_id: string
+          room_id: string | null
+          bed_id: string | null
+          start_date: string
+          end_date: string
+          monthly_rent: number
+          security_deposit: number
+          billing_cycle: 'Monthly' | 'Weekly'
+          status: 'Pending' | 'Active' | 'Completed' | 'Cancelled'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          lease_id?: string
+          tenant_id: string
+          room_id?: string | null
+          bed_id?: string | null
+          start_date: string
+          end_date: string
+          monthly_rent: number
+          security_deposit: number
+          billing_cycle: 'Monthly' | 'Weekly'
+          status?: 'Pending' | 'Active' | 'Completed' | 'Cancelled'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          lease_id?: string
+          tenant_id?: string
+          room_id?: string | null
+          bed_id?: string | null
+          start_date?: string
+          end_date?: string
+          monthly_rent?: number
+          security_deposit?: number
+          billing_cycle?: 'Monthly' | 'Weekly'
+          status?: 'Pending' | 'Active' | 'Completed' | 'Cancelled'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      payment_methods: {
+        Row: {
+          method_id: string
+          user_id: string
+          method_type: 'UPI' | 'Card' | 'Bank'
+          last_four_digits: string | null
+          is_auto_pay: boolean
+          token: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          method_id?: string
+          user_id: string
+          method_type: 'UPI' | 'Card' | 'Bank'
+          last_four_digits?: string | null
+          is_auto_pay?: boolean
+          token?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          method_id?: string
+          user_id?: string
+          method_type?: 'UPI' | 'Card' | 'Bank'
+          last_four_digits?: string | null
+          is_auto_pay?: boolean
+          token?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      transactions: {
+        Row: {
+          transaction_id: string
+          lease_id: string
+          amount: number
+          transaction_date: string
+          status: 'Pending' | 'Success' | 'Failed'
+          payment_gateway_ref: string | null
+          payment_method_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          transaction_id?: string
+          lease_id: string
+          amount: number
+          transaction_date?: string
+          status?: 'Pending' | 'Success' | 'Failed'
+          payment_gateway_ref?: string | null
+          payment_method_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          transaction_id?: string
+          lease_id?: string
+          amount?: number
+          transaction_date?: string
+          status?: 'Pending' | 'Success' | 'Failed'
+          payment_gateway_ref?: string | null
+          payment_method_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      payouts: {
+        Row: {
+          payout_id: string
+          owner_id: string
+          related_transaction_id: string | null
+          gross_amount: number
+          gateway_fee: number
+          net_amount: number
+          payout_date: string | null
+          status: 'Queued' | 'Processing' | 'Completed' | 'Failed'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          payout_id?: string
+          owner_id: string
+          related_transaction_id?: string | null
+          gross_amount: number
+          gateway_fee: number
+          net_amount: number
+          payout_date?: string | null
+          status?: 'Queued' | 'Processing' | 'Completed' | 'Failed'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          payout_id?: string
+          owner_id?: string
+          related_transaction_id?: string | null
+          gross_amount?: number
+          gateway_fee?: number
+          net_amount?: number
+          payout_date?: string | null
+          status?: 'Queued' | 'Processing' | 'Completed' | 'Failed'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      disputes: {
+        Row: {
+          dispute_id: string
+          raised_by_user_id: string
+          related_transaction_id: string | null
+          title: string
+          description: string
+          status: 'Open' | 'In Review' | 'Resolved' | 'Rejected'
+          resolved_by_admin_id: string | null
+          resolution_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          dispute_id?: string
+          raised_by_user_id: string
+          related_transaction_id?: string | null
+          title: string
+          description: string
+          status?: 'Open' | 'In Review' | 'Resolved' | 'Rejected'
+          resolved_by_admin_id?: string | null
+          resolution_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          dispute_id?: string
+          raised_by_user_id?: string
+          related_transaction_id?: string | null
+          title?: string
+          description?: string
+          status?: 'Open' | 'In Review' | 'Resolved' | 'Rejected'
+          resolved_by_admin_id?: string | null
+          resolution_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
