@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAdminExists } from "@/hooks/use-admin-exists";
 import { Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -22,6 +23,7 @@ const Auth = () => {
   const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [role, setRole] = useState<"Tenant" | "Owner" | "Admin">("Tenant");
+  const adminExists = useAdminExists();
   
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -38,16 +40,6 @@ const Auth = () => {
       });
 
       if (authError) {
-        // Handle email confirmation error specifically
-        if (authError.message?.includes("Email not confirmed")) {
-          toast({
-            title: "Email Confirmation Required",
-            description: "Please ask admin to disable email confirmation in Supabase Dashboard: Authentication → Providers → Email → Disable 'Confirm email'",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-          return;
-        }
         throw new Error(authError.message);
       }
 
@@ -68,17 +60,7 @@ const Auth = () => {
       }
 
       // Check if account is approved (except for Admin)
-      if (!userData.is_approved && userData.role !== "Admin") {
-        toast({
-          title: "Account Pending Approval",
-          description: userData.role === "Owner" 
-            ? "Your owner account is waiting for admin approval. You'll be notified via email once approved."
-            : "Your account is waiting for approval.",
-          variant: "destructive",
-        });
-        await supabase.auth.signOut();
-        return;
-      }
+      // Removed approval check for Owner accounts. Owners can log in immediately.
 
       // Show success message
       toast({
@@ -336,6 +318,7 @@ const Auth = () => {
                       <SelectContent>
                         <SelectItem value="Tenant">Tenant</SelectItem>
                         <SelectItem value="Owner">Property Owner</SelectItem>
+                        {!adminExists && <SelectItem value="Admin">Admin</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
@@ -350,9 +333,12 @@ const Auth = () => {
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
+                  <Button type="submit" className="w-full" disabled={isLoading || (role === "Admin" && adminExists)}>
                     {isLoading ? "Creating account..." : "Create Account"}
                   </Button>
+                  {adminExists && (
+                    <div className="text-xs text-red-500 mt-2">An admin account already exists. Only one admin is allowed.</div>
+                  )}
                 </form>
               </TabsContent>
             </Tabs>

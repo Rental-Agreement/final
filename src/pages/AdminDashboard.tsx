@@ -1,119 +1,103 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
-import { Shield, CheckCircle, AlertTriangle, BarChart3 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useAllDisputes, useUpdateDispute } from "@/hooks/use-disputes";
+import { Badge } from "@/components/ui/badge";
 
 const AdminDashboard = () => {
+  const [activeTab, setActiveTab] = useState("disputes");
+  const { data: disputes = [], isLoading } = useAllDisputes();
+  const updateDispute = useUpdateDispute();
+
+  const handleStatusChange = (disputeId: string, status: "Open" | "In Review" | "Resolved" | "Rejected") => {
+    updateDispute.mutate({ id: disputeId, updates: { status } });
+  };
+
   return (
     <DashboardLayout role="admin">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          <p className="text-muted-foreground">Platform oversight and management</p>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Total Users</CardDescription>
-              <CardTitle className="text-2xl">1,234</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Active Properties</CardDescription>
-              <CardTitle className="text-2xl">456</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Pending Approvals</CardDescription>
-              <CardTitle className="text-2xl">23</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Open Disputes</CardDescription>
-              <CardTitle className="text-2xl">7</CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
-
-        {/* Main Actions */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle>Approvals</CardTitle>
-                  <CardDescription>Review pending items</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm mb-4">Approve new owners and property listings</p>
-              <Button variant="outline" className="w-full">View Pending</Button>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-warning" />
-                </div>
-                <div>
-                  <CardTitle>Disputes</CardTitle>
-                  <CardDescription>Resolve user issues</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm mb-4">Review and resolve disputes between parties</p>
-              <Button variant="outline" className="w-full">Manage Disputes</Button>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-                  <BarChart3 className="w-5 h-5 text-success" />
-                </div>
-                <div>
-                  <CardTitle>Analytics</CardTitle>
-                  <CardDescription>System reports</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm mb-4">View platform statistics and generate reports</p>
-              <Button variant="outline" className="w-full">View Reports</Button>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle>User Management</CardTitle>
-                  <CardDescription>Manage all users</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm mb-4">View and manage all platform users</p>
-              <Button variant="outline" className="w-full">Manage Users</Button>
-            </CardContent>
-          </Card>
-        </div>
+        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <p className="text-muted-foreground">Platform oversight and management</p>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+          <TabsList>
+            <TabsTrigger value="disputes">Disputes</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="users">Users</TabsTrigger>
+          </TabsList>
+          <TabsContent value="disputes">
+            <Card>
+              <CardHeader>
+                <CardTitle>All Disputes</CardTitle>
+                <CardDescription>Manage and resolve disputes raised by tenants and owners</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div>Loading disputes...</div>
+                ) : disputes.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">No disputes found</div>
+                ) : (
+                  <div className="space-y-4">
+                    {disputes.map((dispute: any) => (
+                      <Card key={dispute.dispute_id} className="border p-4">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <div className="font-medium">{dispute.description}</div>
+                            <Badge className="ml-2" variant={
+                              dispute.status === 'Resolved' ? 'default' :
+                              dispute.status === 'In Review' ? 'secondary' :
+                              'outline'
+                            }>
+                              {dispute.status}
+                            </Badge>
+                          </div>
+                          <div className="flex gap-2">
+                            {dispute.status !== 'Resolved' && (
+                              <Button size="sm" onClick={() => handleStatusChange(dispute.dispute_id, 'Resolved')}>Resolve</Button>
+                            )}
+                            {dispute.status !== 'In Review' && (
+                              <Button size="sm" variant="outline" onClick={() => handleStatusChange(dispute.dispute_id, 'In Review')}>Mark In Review</Button>
+                            )}
+                          </div>
+                        </div>
+                        {dispute.resolution && (
+                          <div className="mt-2 p-2 bg-muted rounded text-sm">
+                            <p className="font-medium">Resolution:</p>
+                            <p className="text-muted-foreground">{dispute.resolution}</p>
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">Raised: {new Date(dispute.created_at).toLocaleDateString()}</p>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="analytics">
+            <Card>
+              <CardHeader>
+                <CardTitle>Analytics</CardTitle>
+                <CardDescription>Platform analytics and statistics (coming soon)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-muted-foreground">Analytics features will be added here.</div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="users">
+            <Card>
+              <CardHeader>
+                <CardTitle>User Management</CardTitle>
+                <CardDescription>View and manage all users (coming soon)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-muted-foreground">User management features will be added here.</div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

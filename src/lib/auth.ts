@@ -156,7 +156,7 @@ export const signIn = async (data: SignInData): Promise<{ success: boolean; mess
 
     return {
       success: true,
-      message: `Welcome back, ${profile.first_name}!`,
+      message: `Welcome back, ${q.first_name}!`,
       profile: profile as UserProfile
     };
   } catch (error: any) {
