@@ -37,12 +37,13 @@ const AdminDashboard = () => {
   const { data: allUsers = [], isLoading: loadingUsers } = useQuery({
     queryKey: ["all-users"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .order("created_at", { ascending: false });
+        // Use RPC function to bypass RLS policies
+        const { data, error } = await supabase.rpc("get_all_users");
       
-      if (error) throw error;
+        if (error) {
+          console.error("Error fetching users:", error);
+          throw error;
+        }
       return data;
     },
   });
