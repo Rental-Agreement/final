@@ -5,7 +5,7 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, DollarSign, Users, PlusCircle, Home, Bed, Calendar, CheckCircle, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useProperties } from "@/hooks/use-properties";
+import { useOwnerProperties } from "@/hooks/use-properties";
 import { useOwnerLeases } from "@/hooks/use-leases";
 import { PropertyCard } from "@/components/PropertyCard";
 import { LeaseCard } from "@/components/LeaseCard";
@@ -39,18 +39,20 @@ const OwnerDashboard = () => {
   const [showRoomDialog, setShowRoomDialog] = useState(false);
   
   // Bed form state
+  const [selectedPropertyForBed, setSelectedPropertyForBed] = useState("");
   const [selectedRoomForBed, setSelectedRoomForBed] = useState("");
   const [bedNumber, setBedNumber] = useState("");
   const [showBedDialog, setShowBedDialog] = useState(false);
   
   // Fetch data
-  const { data: allProperties = [], isLoading: loadingProperties, refetch: refetchProperties } = useProperties();
+  const { data: ownerPropertiesData = [], isLoading: loadingProperties, refetch: refetchProperties } = useOwnerProperties(profile?.user_id || "");
   const { data: leases = [], isLoading: loadingLeases, refetch: refetchLeases } = useOwnerLeases(profile?.user_id || "");
   
   // Filter owner's properties
-  const ownerProperties = (allProperties as any[]).filter((p: any) => p.owner_id === profile?.user_id);
-  const approvedProperties = ownerProperties.filter((p: any) => p.is_approved === true);
-  const pendingProperties = ownerProperties.filter((p: any) => p.is_approved === false);
+  const ownerProperties = (ownerPropertiesData as any[]);
+  // With verification removed, treat all properties uniformly
+  const approvedProperties = ownerProperties; // keep variable to minimize downstream changes
+  const pendingProperties: any[] = [];
   
   // Filter leases
   const pendingLeases = (leases as any[]).filter((l: any) => l.status === 'Pending');
@@ -82,14 +84,14 @@ const OwnerDashboard = () => {
           state: propertyState,
           zip_code: propertyZip,
           property_type: propertyType,
-          is_approved: false, // Requires admin approval
+          is_approved: true, // Auto-approve on creation
         } as any);
 
       if (error) throw error;
 
       toast({
         title: "Property Added! 🏠",
-        description: "Your property has been submitted for admin approval.",
+        description: "Your property is now active and visible to tenants.",
       });
 
       // Reset form
@@ -139,7 +141,7 @@ const OwnerDashboard = () => {
         description: `Room ${roomNumber} has been added successfully.`,
       });
 
-      // Reset form
+  // Reset form
       setSelectedPropertyForRoom("");
       setRoomNumber("");
       setRoomRent("");
@@ -183,8 +185,9 @@ const OwnerDashboard = () => {
         description: `Bed ${bedNumber} has been added successfully.`,
       });
 
-      // Reset form
-      setSelectedRoomForBed("");
+  // Reset form
+  setSelectedPropertyForBed("");
+  setSelectedRoomForBed("");
       setBedNumber("");
       setShowBedDialog(false);
       
@@ -202,9 +205,9 @@ const OwnerDashboard = () => {
   // Handle lease approval
   const handleApproveLease = async (leaseId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("leases")
-        .update({ status: 'Active' } as any)
+        .update({ status: 'Active' })
         .eq("lease_id", leaseId);
 
       if (error) throw error;
@@ -227,9 +230,9 @@ const OwnerDashboard = () => {
   // Handle lease rejection
   const handleRejectLease = async (leaseId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("leases")
-        .update({ status: 'Terminated' } as any)
+        .update({ status: 'Terminated' })
         .eq("lease_id", leaseId);
 
       if (error) throw error;
@@ -259,14 +262,7 @@ const OwnerDashboard = () => {
           </p>
         </div>
 
-        {/* Account Status Alert */}
-        {!profile?.is_approved && (
-          <Alert>
-            <AlertDescription>
-              ⏳ Your owner account is pending admin approval. You can add properties, but they won't be visible to tenants until your account is approved.
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Account Status Alert removed: verification no longer required */}
 
         {/* Quick Stats */}
         <div className="grid md:grid-cols-4 gap-4">
@@ -492,7 +488,7 @@ const OwnerDashboard = () => {
                     <CardDescription>Manage your property listings</CardDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Dialog open={showRoomDialog} onOpenChange={setShowRoomDialog}>
+                    <Dialog open={showRoomDialog} onOpenChange={(open) => { setShowRoomDialog(open); if (!open) { setSelectedPropertyForRoom(""); setRoomNumber(""); setRoomRent(""); } }}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm">
                           <Home className="w-4 h-4 mr-2" />
@@ -502,9 +498,7 @@ const OwnerDashboard = () => {
                       <DialogContent>
                         <DialogHeader>
                           <DialogTitle>Add Room</DialogTitle>
-                          <DialogDescription>
-                            Add a room to one of your properties
-                          </DialogDescription>
+                          <DialogDescription>Add a room to one of your properties</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
                           <div className="space-y-2">
@@ -514,7 +508,7 @@ const OwnerDashboard = () => {
                                 <SelectValue placeholder="Choose a property..." />
                               </SelectTrigger>
                               <SelectContent>
-                                {approvedProperties.map((property: any) => (
+                                {ownerProperties.map((property: any) => (
                                   <SelectItem key={property.property_id} value={property.property_id}>
                                     {property.address}, {property.city}
                                   </SelectItem>
@@ -553,7 +547,7 @@ const OwnerDashboard = () => {
                       </DialogContent>
                     </Dialog>
 
-                    <Dialog open={showBedDialog} onOpenChange={setShowBedDialog}>
+                    <Dialog open={showBedDialog} onOpenChange={(open) => { setShowBedDialog(open); if (!open) { setSelectedPropertyForBed(""); setSelectedRoomForBed(""); setBedNumber(""); } }}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm">
                           <Bed className="w-4 h-4 mr-2" />
@@ -563,11 +557,24 @@ const OwnerDashboard = () => {
                       <DialogContent>
                         <DialogHeader>
                           <DialogTitle>Add Bed</DialogTitle>
-                          <DialogDescription>
-                            Add a bed to a room (for PG/Hostel)
-                          </DialogDescription>
+                          <DialogDescription>Add a bed to a room (for PG/Hostel)</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="selectBedProperty">Select Property</Label>
+                            <Select value={selectedPropertyForBed} onValueChange={(val) => { setSelectedPropertyForBed(val); setSelectedRoomForBed(""); }}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Choose a property..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ownerProperties.map((property: any) => (
+                                  <SelectItem key={property.property_id} value={property.property_id}>
+                                    {property.address}, {property.city}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                           <div className="space-y-2">
                             <Label htmlFor="selectRoom">Select Room</Label>
                             <Select value={selectedRoomForBed} onValueChange={setSelectedRoomForBed}>
@@ -575,8 +582,13 @@ const OwnerDashboard = () => {
                                 <SelectValue placeholder="Choose a room..." />
                               </SelectTrigger>
                               <SelectContent>
-                                {/* This would need to fetch rooms from properties */}
-                                <SelectItem value="room1">Room 101</SelectItem>
+                                {(
+                                  (ownerProperties.find((p: any) => p.property_id === selectedPropertyForBed)?.rooms as any[]) || []
+                                ).map((room: any) => (
+                                  <SelectItem key={room.room_id} value={room.room_id}>
+                                    Room {room.room_number} - ${room.rent_price}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>

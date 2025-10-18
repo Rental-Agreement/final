@@ -14,18 +14,16 @@ export type Bed = Tables<"beds">;
 export type BedInsert = TablesInsert<"beds">;
 
 // Hook to fetch all approved properties
-export const useProperties = (filters?: { city?: string; type?: string; status?: string }) => {
+export const useProperties = (filters?: { city?: string; type?: string }) => {
   return useQuery({
     queryKey: ["properties", filters],
     queryFn: async () => {
       let query = supabase
         .from("properties")
-        .select("*, rooms(*)")
-        .eq("is_approved", true);
+        .select("*, rooms(*, beds(*))");
 
       if (filters?.city) query = query.eq("city", filters.city);
-      if (filters?.type) query = query.eq("type", filters.type);
-      if (filters?.status) query = query.eq("status", filters.status);
+      if (filters?.type) query = query.eq("property_type", filters.type);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -58,7 +56,7 @@ export const useCreateProperty = () => {
 
   return useMutation({
     mutationFn: async (property: PropertyInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("properties")
         .insert(property)
         .select()
@@ -91,7 +89,7 @@ export const useUpdateProperty = () => {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: PropertyUpdate }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("properties")
         .update(updates)
         .eq("property_id", id)
@@ -126,7 +124,7 @@ export const useCreateRoom = () => {
 
   return useMutation({
     mutationFn: async (room: RoomInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("rooms")
         .insert(room)
         .select()
@@ -159,7 +157,7 @@ export const useCreateBed = () => {
 
   return useMutation({
     mutationFn: async (bed: BedInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("beds")
         .insert(bed)
         .select()

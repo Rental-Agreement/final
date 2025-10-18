@@ -54,9 +54,8 @@ const TenantDashboard = () => {
   const { data: transactions = [] } = useLeaseTransactions(selectedLeaseForPayment || (leases as any)[0]?.lease_id || "");
   const { data: disputes = [] } = useAllDisputes();
 
-  // Filter properties
-  const approvedProperties = properties.filter((p: any) => p.is_approved === true);
-  const filteredProperties = approvedProperties.filter((property: any) => {
+  // Filter properties (approval removed, show all)
+  const filteredProperties = (properties as any[]).filter((property: any) => {
     const matchesCity = !searchCity || property.city?.toLowerCase().includes(searchCity.toLowerCase());
     const matchesType = searchType === "All" || property.property_type === searchType;
     return matchesCity && matchesType;
@@ -72,8 +71,8 @@ const TenantDashboard = () => {
   const activeLeaseEndDate = (activeLeases as any[])[0]?.end_date || 'N/A';
 
   // Handle lease application
-  const handleApplyForLease = async () => {
-    if (!selectedPropertyId || !leaseStart || !leaseEnd) {
+  const handleApplyForLease = async (propertyId: string) => {
+    if (!propertyId || !leaseStart || !leaseEnd) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
@@ -87,7 +86,7 @@ const TenantDashboard = () => {
         .from("leases")
         .insert({
           tenant_id: profile?.user_id,
-          property_id: selectedPropertyId,
+          property_id: propertyId,
           room_id: selectedRoomId || null,
           bed_id: selectedBedId || null,
           start_date: leaseStart,
@@ -268,7 +267,7 @@ const TenantDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm mb-4">
-                    {approvedProperties.length} properties available
+                    {filteredProperties.length} properties available
                   </p>
                   <Button 
                     className="w-full" 
@@ -463,10 +462,7 @@ const TenantDashboard = () => {
                             </div>
                             <Button
                               className="w-full"
-                              onClick={() => {
-                                setSelectedPropertyId(property.property_id);
-                                handleApplyForLease();
-                              }}
+                              onClick={() => handleApplyForLease(property.property_id)}
                             >
                               Submit Application
                             </Button>

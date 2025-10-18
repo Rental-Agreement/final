@@ -39,10 +39,11 @@ export const useOwnerLeases = (ownerId: string) => {
         .select(`
           *,
           tenant:users!leases_tenant_id_fkey(*),
-          rooms(*, properties!inner(*)),
-          beds(*, rooms(*, properties!inner(*)))
+          properties!inner(*),
+          rooms(*),
+          beds(*)
         `)
-        .or(`rooms.properties.owner_id.eq.${ownerId},beds.rooms.properties.owner_id.eq.${ownerId}`)
+        .eq("properties.owner_id", ownerId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -59,7 +60,7 @@ export const useCreateLease = () => {
 
   return useMutation({
     mutationFn: async (lease: LeaseInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("leases")
         .insert(lease)
         .select()
@@ -93,7 +94,7 @@ export const useUpdateLease = () => {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: LeaseUpdate }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("leases")
         .update(updates)
         .eq("lease_id", id)

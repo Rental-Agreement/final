@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, MapPin, Home } from "lucide-react";
+import { Building2, MapPin, Home, DollarSign } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Property = Tables<"properties"> & {
@@ -17,7 +17,10 @@ interface PropertyCardProps {
 
 export function PropertyCard({ property, onApply, onView, showActions = true }: PropertyCardProps) {
   const totalRooms = property.rooms?.length || 0;
-  const availableRooms = property.rooms?.filter(r => r.status === "Available").length || 0;
+  const availableRooms = property.rooms?.filter((r: any) => !r.is_occupied).length || 0;
+  const minRent = property.rooms && property.rooms.length > 0
+    ? Math.min(...property.rooms.map((r: any) => Number(r.rent_price || 0)))
+    : null;
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
@@ -25,15 +28,17 @@ export function PropertyCard({ property, onApply, onView, showActions = true }: 
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-primary" />
-            <CardTitle className="text-lg">{property.type || "Property"}</CardTitle>
+            <CardTitle className="text-lg">{(property as any).property_type || "Property"}</CardTitle>
           </div>
-          <Badge variant={property.status === "Available" ? "default" : "secondary"}>
-            {property.status}
-          </Badge>
+          {totalRooms > 0 && (
+            <Badge variant={availableRooms > 0 ? "default" : "secondary"}>
+              {availableRooms > 0 ? "Available" : "Full"}
+            </Badge>
+          )}
         </div>
         <CardDescription className="flex items-center gap-1 mt-2">
           <MapPin className="h-4 w-4" />
-          {property.address_line_1}
+          {(property as any).address || (property as any).address_line_1}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -46,10 +51,11 @@ export function PropertyCard({ property, onApply, onView, showActions = true }: 
             <span>{totalRooms} rooms ({availableRooms} available)</span>
           </div>
         )}
-        {property.is_approved ? (
-          <Badge variant="outline" className="mt-2">Verified</Badge>
-        ) : (
-          <Badge variant="secondary" className="mt-2">Pending Approval</Badge>
+        {minRent !== null && (
+          <div className="flex items-center gap-2 text-sm mt-2">
+            <DollarSign className="h-4 w-4" />
+            <span>From ${minRent}/month</span>
+          </div>
         )}
       </CardContent>
       {showActions && (
@@ -59,7 +65,7 @@ export function PropertyCard({ property, onApply, onView, showActions = true }: 
               View Details
             </Button>
           )}
-          {onApply && property.status === "Available" && (
+          {onApply && (
             <Button onClick={() => onApply(property.property_id)}>
               Apply
             </Button>
