@@ -141,7 +141,7 @@ const AdminDashboard = () => {
   };
 
   // Analytics data via RPC
-  const { data: analytics, isLoading: loadingAnalytics } = useQuery({
+  const { data: analytics, isLoading: loadingAnalytics, error: analyticsError } = useQuery({
     queryKey: ["admin-analytics"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("admin_get_analytics");
@@ -374,7 +374,15 @@ const AdminDashboard = () => {
                 <CardDescription>Key metrics and trends for your platform</CardDescription>
               </CardHeader>
               <CardContent>
-                {loadingAnalytics ? (
+                {analyticsError ? (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertTitle>Analytics unavailable</AlertTitle>
+                    <AlertDescription>
+                      {String((analyticsError as any)?.message || analyticsError)}<br />
+                      Ensure you have run the SQL in <code>supabase/admin_analytics.sql</code> and that your account role is <strong>Admin</strong>. Then reload the page.
+                    </AlertDescription>
+                  </Alert>
+                ) : loadingAnalytics ? (
                   <div className="text-center py-8 text-muted-foreground">Loading analytics...</div>
                 ) : analytics ? (
                   <div className="space-y-8">
@@ -402,6 +410,9 @@ const AdminDashboard = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <Card className="p-4">
                         <p className="text-sm font-medium mb-2">Revenue by Month</p>
+                        {(!analytics.revenue || analytics.revenue.length === 0) ? (
+                          <div className="text-muted-foreground py-8">No revenue data yet.</div>
+                        ) : (
                         <ChartContainer config={{ revenue: { label: "Revenue", color: "hsl(220 70% 50%)" } }}>
                           <LineChart data={analytics.revenue}>
                             <CartesianGrid strokeDasharray="3 3" />
@@ -411,10 +422,14 @@ const AdminDashboard = () => {
                             <Line type="monotone" dataKey="value" stroke="var(--color-revenue)" strokeWidth={2} dot={false} />
                           </LineChart>
                         </ChartContainer>
+                        )}
                       </Card>
 
                       <Card className="p-4">
                         <p className="text-sm font-medium mb-2">New Users by Month</p>
+                        {(!analytics.users || analytics.users.length === 0) ? (
+                          <div className="text-muted-foreground py-8">No user signup data yet.</div>
+                        ) : (
                         <ChartContainer config={{ users: { label: "Users", color: "hsl(140 70% 40%)" } }}>
                           <LineChart data={analytics.users}>
                             <CartesianGrid strokeDasharray="3 3" />
@@ -424,6 +439,7 @@ const AdminDashboard = () => {
                             <Line type="monotone" dataKey="value" stroke="var(--color-users)" strokeWidth={2} dot={false} />
                           </LineChart>
                         </ChartContainer>
+                        )}
                       </Card>
                     </div>
                   </div>

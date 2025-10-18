@@ -3,6 +3,7 @@ BEGIN;
 
 -- Depends on public.is_admin() created earlier
 
+CLEAR;
 CREATE OR REPLACE FUNCTION public.admin_get_analytics()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -48,7 +49,7 @@ BEGIN
     SELECT to_char(m.month, 'YYYY-MM') AS label, COALESCE(SUM(t.amount), 0)::numeric AS value
     FROM months m
     LEFT JOIN public.transactions t
-      ON date_trunc('month', t.transaction_date) = m.month
+      ON date_trunc('month', COALESCE(t.transaction_date, t.created_at)) = m.month
       AND t.status = 'Success'
     GROUP BY m.month
     ORDER BY m.month
