@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Building2, CheckCircle, XCircle, Users, FileText, Home } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("properties");
@@ -137,6 +139,16 @@ const AdminDashboard = () => {
   const handleStatusChange = (disputeId: string, status: "Open" | "In Review" | "Resolved" | "Rejected") => {
     updateDispute.mutate({ id: disputeId, updates: { status } });
   };
+
+  // Analytics data via RPC
+  const { data: analytics, isLoading: loadingAnalytics } = useQuery({
+    queryKey: ["admin-analytics"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("admin_get_analytics");
+      if (error) throw error;
+      return data as any;
+    },
+  });
 
   return (
     <DashboardLayout role="admin">
@@ -359,10 +371,65 @@ const AdminDashboard = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Analytics</CardTitle>
-                <CardDescription>Platform analytics and statistics (coming soon)</CardDescription>
+                <CardDescription>Key metrics and trends for your platform</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-muted-foreground">Analytics features will be added here.</div>
+                {loadingAnalytics ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading analytics...</div>
+                ) : analytics ? (
+                  <div className="space-y-8">
+                    {/* KPI Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <Card className="p-4">
+                        <p className="text-sm text-muted-foreground">Total Users</p>
+                        <p className="text-2xl font-bold">{analytics.kpis.total_users}</p>
+                      </Card>
+                      <Card className="p-4">
+                        <p className="text-sm text-muted-foreground">Approved Properties</p>
+                        <p className="text-2xl font-bold">{analytics.kpis.properties_approved}</p>
+                      </Card>
+                      <Card className="p-4">
+                        <p className="text-sm text-muted-foreground">Active Leases</p>
+                        <p className="text-2xl font-bold">{analytics.kpis.leases_active}</p>
+                      </Card>
+                      <Card className="p-4">
+                        <p className="text-sm text-muted-foreground">Revenue (All-time)</p>
+                        <p className="text-2xl font-bold">₹{Number(analytics.kpis.revenue_total).toLocaleString()}</p>
+                      </Card>
+                    </div>
+
+                    {/* Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <Card className="p-4">
+                        <p className="text-sm font-medium mb-2">Revenue by Month</p>
+                        <ChartContainer config={{ revenue: { label: "Revenue", color: "hsl(220 70% 50%)" } }}>
+                          <LineChart data={analytics.revenue}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="label" />
+                            <YAxis />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Line type="monotone" dataKey="value" stroke="var(--color-revenue)" strokeWidth={2} dot={false} />
+                          </LineChart>
+                        </ChartContainer>
+                      </Card>
+
+                      <Card className="p-4">
+                        <p className="text-sm font-medium mb-2">New Users by Month</p>
+                        <ChartContainer config={{ users: { label: "Users", color: "hsl(140 70% 40%)" } }}>
+                          <LineChart data={analytics.users}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="label" />
+                            <YAxis />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Line type="monotone" dataKey="value" stroke="var(--color-users)" strokeWidth={2} dot={false} />
+                          </LineChart>
+                        </ChartContainer>
+                      </Card>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground">No analytics available.</div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
