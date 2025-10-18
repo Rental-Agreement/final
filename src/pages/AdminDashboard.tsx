@@ -4,12 +4,81 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAllDisputes, useUpdateDispute } from "@/hooks/use-disputes";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { Building2, CheckCircle, XCircle } from "lucide-react";
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState("disputes");
+  const [activeTab, setActiveTab] = useState("properties");
   const { data: disputes = [], isLoading } = useAllDisputes();
   const updateDispute = useUpdateDispute();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch pending properties
+  const { data: pendingProperties = [], isLoading: loadingProperties } = useQuery({
+    queryKey: ["pending-properties"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("properties")
+        .select("*, owner:users!properties_owner_id_fkey(first_name, last_name, email)")
+        .eq("is_approved", false)
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const handleApproveProperty = async (propertyId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from("properties")
+        .update({ is_approved: true })
+        .eq("property_id", propertyId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Property Approved! ✅",
+        description: "The property is now visible to tenants.",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["pending-properties"] });
+    } catch (error: any) {
+      toast({
+        title: "Approval Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRejectProperty = async (propertyId: string) => {
+    try {
+      const { error } = await supabase
+        .from("properties")
+        .delete()
+        .eq("property_id", propertyId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Property Rejected",
+        description: "The property has been removed.",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["pending-properties"] });
+    } catch (error: any) {
+      toast({
+        title: "Rejection Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleStatusChange = (disputeId: string, status: "Open" | "In Review" | "Resolved" | "Rejected") => {
     updateDispute.mutate({ id: disputeId, updates: { status } });
@@ -22,10 +91,73 @@ const AdminDashboard = () => {
         <p className="text-muted-foreground">Platform oversight and management</p>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
           <TabsList>
+            <TabsTrigger value="properties">Property Approvals</TabsTrigger>
             <TabsTrigger value="disputes">Disputes</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
           </TabsList>
+          <TabsContent value="properties">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  Pending Property Approvals
+                </CardTitle>
+                <CardDescription>Review and approve properties submitted by owners</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingProperties ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading properties...</div>
+                ) : pendingProperties.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Building2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No pending property approvals</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingProperties.map((property: any) => (
+                      <Card key={property.property_id} className="border p-4">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-semibold text-lg">{property.property_type}</h3>
+                              <Badge variant="secondary">Pending</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              <strong>Address:</strong> {property.address}, {property.city}, {property.state} {property.zip_code}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              <strong>Owner:</strong> {property.owner?.first_name} {property.owner?.last_name} ({property.owner?.email})
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Submitted: {new Date(property.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex gap-2 ml-4">
+                            <Button
+                              size="sm"
+                              onClick={() => handleApproveProperty(property.property_id)}
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleRejectProperty(property.property_id)}
+                            >
+                              <XCircle className="w-4 h-4 mr-1" />
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
           <TabsContent value="disputes">
             <Card>
               <CardHeader>

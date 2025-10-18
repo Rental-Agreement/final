@@ -50,9 +50,8 @@ const OwnerDashboard = () => {
   
   // Filter owner's properties
   const ownerProperties = (ownerPropertiesData as any[]);
-  // With verification removed, treat all properties uniformly
-  const approvedProperties = ownerProperties; // keep variable to minimize downstream changes
-  const pendingProperties: any[] = [];
+  const approvedProperties = ownerProperties.filter((p: any) => p.is_approved === true);
+  const pendingProperties = ownerProperties.filter((p: any) => p.is_approved === false);
   
   // Filter leases
   const pendingLeases = (leases as any[]).filter((l: any) => l.status === 'Pending');
@@ -84,14 +83,14 @@ const OwnerDashboard = () => {
           state: propertyState,
           zip_code: propertyZip,
           property_type: propertyType,
-          is_approved: true, // Auto-approve on creation
+          is_approved: false, // Requires admin approval
         } as any);
 
       if (error) throw error;
 
       toast({
         title: "Property Added! 🏠",
-        description: "Your property is now active and visible to tenants.",
+        description: "Your property has been submitted for admin approval.",
       });
 
       // Reset form

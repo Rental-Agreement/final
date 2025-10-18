@@ -20,7 +20,8 @@ export const useProperties = (filters?: { city?: string; type?: string }) => {
     queryFn: async () => {
       let query = supabase
         .from("properties")
-        .select("*, rooms(*, beds(*))");
+        .select("*, rooms(*, beds(*))")
+        .eq("is_approved", true); // Only show approved properties
 
       if (filters?.city) query = query.eq("city", filters.city);
       if (filters?.type) query = query.eq("property_type", filters.type);
