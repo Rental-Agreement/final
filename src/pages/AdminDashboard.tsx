@@ -144,10 +144,15 @@ const AdminDashboard = () => {
   const { data: analytics, isLoading: loadingAnalytics, error: analyticsError } = useQuery({
     queryKey: ["admin-analytics"],
     queryFn: async () => {
-      // Call v2 RPC to avoid old cached function body
-      const { data, error } = await supabase.rpc("admin_get_analytics_v2");
-      if (error) throw error;
-      return data as any;
+      // Try v2 first (uses created_at only). If missing, attempt legacy function.
+      const v2: any = await (supabase as any).rpc("admin_get_analytics_v2");
+      if (!v2.error && v2.data) return v2.data;
+
+      const legacy: any = await (supabase as any).rpc("admin_get_analytics");
+      if (!legacy.error && legacy.data) return legacy.data;
+
+      // Prefer v2 error message if available
+      throw (v2.error || legacy.error);
     },
   });
 

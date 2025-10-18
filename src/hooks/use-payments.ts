@@ -20,7 +20,7 @@ export const useLeaseTransactions = (leaseId: string) => {
         .from("transactions")
         .select("*, payment_methods(*)")
         .eq("lease_id", leaseId)
-        .order("transaction_date", { ascending: false });
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data;
