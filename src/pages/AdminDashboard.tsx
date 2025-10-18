@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, CheckCircle, XCircle, Users, FileText, Home } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("properties");
@@ -34,7 +35,7 @@ const AdminDashboard = () => {
   });
 
   // Fetch all users for user management
-  const { data: allUsers = [], isLoading: loadingUsers } = useQuery({
+  const { data: allUsers = [], isLoading: loadingUsers, error: usersError } = useQuery({
     queryKey: ["all-users"],
     queryFn: async () => {
         // Use RPC function to bypass RLS policies
