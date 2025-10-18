@@ -8,7 +8,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, CheckCircle, XCircle } from "lucide-react";
+import { Building2, CheckCircle, XCircle, Users, FileText, Home } from "lucide-react";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("properties");
@@ -25,6 +26,57 @@ const AdminDashboard = () => {
         .from("properties")
         .select("*, owner:users!properties_owner_id_fkey(first_name, last_name, email)")
         .eq("is_approved", false)
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch all users for user management
+  const { data: allUsers = [], isLoading: loadingUsers } = useQuery({
+    queryKey: ["all-users"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch disputes with full details (lease, tenant, owner, property)
+  const { data: enhancedDisputes = [], isLoading: loadingEnhancedDisputes } = useQuery({
+    queryKey: ["enhanced-disputes"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("disputes")
+        .select(`
+          *,
+          raised_by:users!disputes_raised_by_user_id_fkey(first_name, last_name, email, role),
+          transactions(
+            transaction_id,
+            amount,
+            payment_method,
+            leases(
+              lease_id,
+              lease_start,
+              lease_end,
+              rent,
+              tenant:users!leases_tenant_id_fkey(first_name, last_name, email),
+              properties(
+                property_id,
+                property_type,
+                address,
+                city,
+                state,
+                owner:users!properties_owner_id_fkey(first_name, last_name, email)
+              )
+            )
+          )
+        `)
         .order("created_at", { ascending: false });
       
       if (error) throw error;
@@ -161,47 +213,141 @@ const AdminDashboard = () => {
           <TabsContent value="disputes">
             <Card>
               <CardHeader>
-                <CardTitle>All Disputes</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  All Disputes
+                </CardTitle>
                 <CardDescription>Manage and resolve disputes raised by tenants and owners</CardDescription>
               </CardHeader>
               <CardContent>
-                {isLoading ? (
-                  <div>Loading disputes...</div>
-                ) : disputes.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">No disputes found</div>
+                {loadingEnhancedDisputes ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading disputes...</div>
+                ) : enhancedDisputes.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No disputes found</p>
+                  </div>
                 ) : (
                   <div className="space-y-4">
-                    {disputes.map((dispute: any) => (
-                      <Card key={dispute.dispute_id} className="border p-4">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <div className="font-medium">{dispute.description}</div>
-                            <Badge className="ml-2" variant={
-                              dispute.status === 'Resolved' ? 'default' :
-                              dispute.status === 'In Review' ? 'secondary' :
-                              'outline'
-                            }>
-                              {dispute.status}
-                            </Badge>
-                          </div>
-                          <div className="flex gap-2">
-                            {dispute.status !== 'Resolved' && (
-                              <Button size="sm" onClick={() => handleStatusChange(dispute.dispute_id, 'Resolved')}>Resolve</Button>
+                    {enhancedDisputes.map((dispute: any) => {
+                      const transaction = dispute.transactions;
+                      const lease = transaction?.leases;
+                      const property = lease?.properties;
+                      const tenant = lease?.tenant;
+                      const owner = property?.owner;
+
+                      return (
+                        <Card key={dispute.dispute_id} className="border p-4">
+                          <div className="space-y-3">
+                            {/* Dispute Header */}
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h3 className="font-semibold text-lg">Dispute #{dispute.dispute_id.slice(0, 8)}</h3>
+                                  <Badge variant={
+                                    dispute.status === 'Resolved' ? 'default' :
+                                    dispute.status === 'In Review' ? 'secondary' :
+                                    'outline'
+                                  }>
+                                    {dispute.status}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm">{dispute.description}</p>
+                              </div>
+                              <div className="flex gap-2 ml-4">
+                                {dispute.status !== 'Resolved' && (
+                                  <Button size="sm" onClick={() => handleStatusChange(dispute.dispute_id, 'Resolved')}>
+                                    <CheckCircle className="w-4 h-4 mr-1" />
+                                    Resolve
+                                  </Button>
+                                )}
+                                {dispute.status !== 'In Review' && (
+                                  <Button size="sm" variant="outline" onClick={() => handleStatusChange(dispute.dispute_id, 'In Review')}>
+                                    In Review
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Dispute Details Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-muted/50 rounded-lg">
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-1">Raised By</p>
+                                <p className="text-sm font-medium">
+                                  {dispute.raised_by?.first_name} {dispute.raised_by?.last_name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {dispute.raised_by?.email} • {dispute.raised_by?.role}
+                                </p>
+                              </div>
+                              
+                              {property && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-1">Property</p>
+                                  <p className="text-sm font-medium">{property.property_type}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {property.address}, {property.city}, {property.state}
+                                  </p>
+                                </div>
+                              )}
+
+                              {tenant && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-1">Tenant</p>
+                                  <p className="text-sm font-medium">
+                                    {tenant.first_name} {tenant.last_name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{tenant.email}</p>
+                                </div>
+                              )}
+
+                              {owner && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-1">Owner</p>
+                                  <p className="text-sm font-medium">
+                                    {owner.first_name} {owner.last_name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{owner.email}</p>
+                                </div>
+                              )}
+
+                              {lease && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-1">Lease Details</p>
+                                  <p className="text-sm font-medium">
+                                    ${lease.rent}/month
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(lease.lease_start).toLocaleDateString()} - {new Date(lease.lease_end).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              )}
+
+                              {transaction && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-1">Transaction</p>
+                                  <p className="text-sm font-medium">${transaction.amount}</p>
+                                  <p className="text-xs text-muted-foreground">{transaction.payment_method}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Resolution */}
+                            {dispute.resolution && (
+                              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <p className="font-medium text-sm mb-1 text-green-900 dark:text-green-100">Resolution:</p>
+                                <p className="text-sm text-green-800 dark:text-green-200">{dispute.resolution}</p>
+                              </div>
                             )}
-                            {dispute.status !== 'In Review' && (
-                              <Button size="sm" variant="outline" onClick={() => handleStatusChange(dispute.dispute_id, 'In Review')}>Mark In Review</Button>
-                            )}
+
+                            {/* Timestamp */}
+                            <p className="text-xs text-muted-foreground">
+                              Raised: {new Date(dispute.created_at).toLocaleDateString()} at {new Date(dispute.created_at).toLocaleTimeString()}
+                            </p>
                           </div>
-                        </div>
-                        {dispute.resolution && (
-                          <div className="mt-2 p-2 bg-muted rounded text-sm">
-                            <p className="font-medium">Resolution:</p>
-                            <p className="text-muted-foreground">{dispute.resolution}</p>
-                          </div>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-2">Raised: {new Date(dispute.created_at).toLocaleDateString()}</p>
-                      </Card>
-                    ))}
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -221,11 +367,99 @@ const AdminDashboard = () => {
           <TabsContent value="users">
             <Card>
               <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>View and manage all users (coming soon)</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  User Management
+                </CardTitle>
+                <CardDescription>View and manage all registered users</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-muted-foreground">User management features will be added here.</div>
+                {loadingUsers ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading users...</div>
+                ) : allUsers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No users found</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Registered</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allUsers.map((user: any) => (
+                          <TableRow key={user.user_id}>
+                            <TableCell className="font-medium">
+                              {user.first_name} {user.last_name}
+                            </TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>{user.phone_number || '-'}</TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                user.role === 'Admin' ? 'default' :
+                                user.role === 'Owner' ? 'secondary' :
+                                'outline'
+                              }>
+                                {user.role}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {new Date(user.created_at).toLocaleDateString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                
+                {/* User Statistics */}
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                        <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Users</p>
+                        <p className="text-2xl font-bold">{allUsers.length}</p>
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                        <Home className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Owners</p>
+                        <p className="text-2xl font-bold">
+                          {allUsers.filter((u: any) => u.role === 'Owner').length}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                        <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Tenants</p>
+                        <p className="text-2xl font-bold">
+                          {allUsers.filter((u: any) => u.role === 'Tenant').length}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
