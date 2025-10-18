@@ -144,7 +144,8 @@ const AdminDashboard = () => {
   const { data: analytics, isLoading: loadingAnalytics, error: analyticsError } = useQuery({
     queryKey: ["admin-analytics"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("admin_get_analytics");
+      // Call v2 RPC to avoid old cached function body
+      const { data, error } = await supabase.rpc("admin_get_analytics_v2");
       if (error) throw error;
       return data as any;
     },
