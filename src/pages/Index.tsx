@@ -6,6 +6,15 @@ import { Link } from "react-router-dom";
 const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-background">
+      {/* Top-right Auth Buttons */}
+      <div className="container mx-auto px-4 pt-4 flex justify-end gap-2">
+        <Link to="/auth?tab=signin">
+          <Button variant="outline" size="sm">Login</Button>
+        </Link>
+        <Link to="/auth?tab=signup">
+          <Button size="sm">Sign Up</Button>
+        </Link>
+      </div>
       {/* Hero Section */}
       <section className="container mx-auto px-4 pt-20 pb-16">
         <div className="text-center space-y-6 max-w-4xl mx-auto">
@@ -26,7 +35,7 @@ const Index = () => {
           </p>
           
           <div className="flex flex-wrap gap-4 justify-center pt-4">
-            <Link to="/auth">
+            <Link to="/auth?tab=signup">
               <Button size="lg" className="gap-2 shadow-lg hover:shadow-xl transition-all">
                 Get Started <ArrowRight className="w-4 h-4" />
               </Button>
@@ -156,7 +165,7 @@ const Index = () => {
           <p className="text-muted-foreground">
             Join our platform today and experience seamless property management
           </p>
-          <Link to="/auth">
+          <Link to="/auth?tab=signup">
             <Button size="lg" className="gap-2">
               Create Account <ArrowRight className="w-4 h-4" />
             </Button>

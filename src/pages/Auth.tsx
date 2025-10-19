@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,8 @@ import { Link } from "react-router-dom";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
+  const [params] = useSearchParams();
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   
@@ -27,6 +29,14 @@ const Auth = () => {
   
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Sync active tab with query param (?tab=signup|signin)
+  useEffect(() => {
+    const tab = params.get("tab");
+    if (tab === "signup" || tab === "signin") {
+      setActiveTab(tab);
+    }
+  }, [params]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,7 +238,7 @@ const Auth = () => {
             <CardDescription>Sign in or create a new account</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="signin" className="w-full">
+            <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="signin">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -266,7 +276,7 @@ const Auth = () => {
                   </Button>
                 </form>
               </TabsContent>
-
+      
               <TabsContent value="signup">
                 <form onSubmit={handleRegister} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">

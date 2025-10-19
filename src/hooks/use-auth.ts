@@ -54,6 +54,12 @@ export const useAuth = () => {
     }
   };
 
+  const refreshProfile = async () => {
+    const authId = user?.id;
+    if (!authId) return;
+    await fetchProfile(authId);
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -65,6 +71,7 @@ export const useAuth = () => {
     profile,
     loading,
     signOut,
+    refreshProfile,
     isAuthenticated: !!user,
     isAdmin: profile?.role === "Admin",
     isOwner: profile?.role === "Owner",
