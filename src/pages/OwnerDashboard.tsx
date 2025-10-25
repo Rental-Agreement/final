@@ -10,6 +10,7 @@ import { useOwnerLeases } from "@/hooks/use-leases";
 import { PropertyCard } from "@/components/PropertyCard";
 import { LeaseCard } from "@/components/LeaseCard";
 import { Input } from "@/components/ui/input";
+import { useRef } from "react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,6 +25,9 @@ const OwnerDashboard = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
   
+  // State for property details modal
+  const [detailsProperty, setDetailsProperty] = useState<any | null>(null);
+  
   // Property form state
   const [propertyAddress, setPropertyAddress] = useState("");
   const [propertyCity, setPropertyCity] = useState("");
@@ -31,6 +35,22 @@ const OwnerDashboard = () => {
   const [propertyZip, setPropertyZip] = useState("");
   const [propertyType, setPropertyType] = useState<"Flat" | "PG" | "Hostel">("Flat");
   const [showPropertyDialog, setShowPropertyDialog] = useState(false);
+  const [propertyImages, setPropertyImages] = useState<string[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  // Append-images dialog state
+  const [showImagesDialog, setShowImagesDialog] = useState(false);
+  const [selectedPropertyForImages, setSelectedPropertyForImages] = useState<any | null>(null);
+  const appendImagesInputRef = useRef<HTMLInputElement>(null);
+  
+  // New fields for OYO-style specifications
+  const [pricePerRoom, setPricePerRoom] = useState("");
+  const [wifiAvailable, setWifiAvailable] = useState(false);
+  const [timings, setTimings] = useState("");
+  const [elevator, setElevator] = useState(false);
+  const [geyser, setGeyser] = useState(false);
+  const [ac, setAc] = useState(false);
+  const [parking, setParking] = useState(false);
+  const [propertyDescription, setPropertyDescription] = useState("");
   
   // Room form state
   const [selectedPropertyForRoom, setSelectedPropertyForRoom] = useState("");
@@ -73,6 +93,21 @@ const OwnerDashboard = () => {
       return;
     }
 
+    let imageUrls: string[] = [];
+    if (imageInputRef.current && imageInputRef.current.files && imageInputRef.current.files.length > 0) {
+      const files = Array.from(imageInputRef.current.files);
+      for (const file of files) {
+        const filePath = `property-images/${Date.now()}_${file.name}`;
+  const { data, error } = await supabase.storage.from("property-image").upload(filePath, file);
+        if (error) {
+          toast({ title: "Image Upload Failed", description: error.message, variant: "destructive" });
+        } else {
+  const { publicUrl } = supabase.storage.from("property-image").getPublicUrl(filePath).data;
+    imageUrls.push(publicUrl);
+        }
+      }
+    }
+
     try {
       const { error } = await supabase
         .from("properties")
@@ -84,6 +119,21 @@ const OwnerDashboard = () => {
           zip_code: propertyZip,
           property_type: propertyType,
           is_approved: false, // Requires admin approval
+          images: imageUrls,
+          price_per_room: pricePerRoom ? parseFloat(pricePerRoom) : null,
+          wifi_available: wifiAvailable,
+          timings: timings || null,
+          amenities: {
+            elevator: elevator,
+            geyser: geyser,
+            ac: ac,
+            parking: parking,
+          },
+          custom_specs: {
+            description: propertyDescription,
+          },
+          rating: 4.5,
+          rating_count: 0,
         } as any);
 
       if (error) throw error;
@@ -99,9 +149,17 @@ const OwnerDashboard = () => {
       setPropertyState("");
       setPropertyZip("");
       setPropertyType("Flat");
+      setPropertyImages([]);
+      setPricePerRoom("");
+      setWifiAvailable(false);
+      setTimings("");
+      setElevator(false);
+      setGeyser(false);
+      setAc(false);
+      setParking(false);
+      setPropertyDescription("");
+      if (imageInputRef.current) imageInputRef.current.value = "";
       setShowPropertyDialog(false);
-      
-      // Refresh properties
       refetchProperties();
     } catch (error: any) {
       toast({
@@ -109,6 +167,45 @@ const OwnerDashboard = () => {
         description: error.message,
         variant: "destructive",
       });
+    }
+  };
+
+  // Handle append images to existing property
+  const handleAppendImages = async () => {
+    if (!selectedPropertyForImages) return;
+    if (!appendImagesInputRef.current || !appendImagesInputRef.current.files || appendImagesInputRef.current.files.length === 0) {
+      toast({ title: "No files selected", description: "Please choose one or more images to upload.", variant: "destructive" });
+      return;
+    }
+
+    const files = Array.from(appendImagesInputRef.current.files);
+    const newUrls: string[] = [];
+    for (const file of files) {
+      const filePath = `property-images/${Date.now()}_${file.name}`;
+      const { error } = await supabase.storage.from("property-image").upload(filePath, file);
+      if (error) {
+        toast({ title: "Image Upload Failed", description: error.message, variant: "destructive" });
+        return;
+      }
+      const { publicUrl } = supabase.storage.from("property-image").getPublicUrl(filePath).data;
+      newUrls.push(publicUrl);
+    }
+
+    try {
+      const existing = (selectedPropertyForImages.images || []) as string[];
+      const updated = [...existing, ...newUrls];
+      const { error } = await (supabase as any)
+        .from("properties")
+        .update({ images: updated })
+        .eq("property_id", selectedPropertyForImages.property_id);
+      if (error) throw error;
+      toast({ title: "Images added", description: `${newUrls.length} image(s) uploaded.` });
+      setShowImagesDialog(false);
+      setSelectedPropertyForImages(null);
+      if (appendImagesInputRef.current) appendImagesInputRef.current.value = "";
+      await refetchProperties();
+    } catch (err: any) {
+      toast({ title: "Update failed", description: err.message || String(err), variant: "destructive" });
     }
   };
 
@@ -349,7 +446,7 @@ const OwnerDashboard = () => {
                     </CardContent>
                   </Card>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Property</DialogTitle>
                     <DialogDescription>
@@ -395,18 +492,124 @@ const OwnerDashboard = () => {
                         onChange={(e) => setPropertyZip(e.target.value)}
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="type">Property Type</Label>
+                        <Select value={propertyType} onValueChange={(value: any) => setPropertyType(value)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Flat">Flat</SelectItem>
+                            <SelectItem value="PG">PG (Paying Guest)</SelectItem>
+                            <SelectItem value="Hostel">Hostel</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="price">Price per Room (₹)</Label>
+                        <Input
+                          id="price"
+                          type="number"
+                          placeholder="5000"
+                          value={pricePerRoom}
+                          onChange={(e) => setPricePerRoom(e.target.value)}
+                        />
+                      </div>
+                    </div>
                     <div className="space-y-2">
-                      <Label htmlFor="type">Property Type</Label>
-                      <Select value={propertyType} onValueChange={(value: any) => setPropertyType(value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Flat">Flat</SelectItem>
-                          <SelectItem value="PG">PG (Paying Guest)</SelectItem>
-                          <SelectItem value="Hostel">Hostel</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="description">Property Description</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Describe your property..."
+                        value={propertyDescription}
+                        onChange={(e) => setPropertyDescription(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="timings">Check-in/Check-out Timings</Label>
+                      <Input
+                        id="timings"
+                        placeholder="e.g., Check-in: 2 PM, Check-out: 11 AM"
+                        value={timings}
+                        onChange={(e) => setTimings(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Amenities</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="wifi"
+                            checked={wifiAvailable}
+                            onChange={(e) => setWifiAvailable(e.target.checked)}
+                            className="rounded"
+                          />
+                          <label htmlFor="wifi" className="text-sm">WiFi Available</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="elevator"
+                            checked={elevator}
+                            onChange={(e) => setElevator(e.target.checked)}
+                            className="rounded"
+                          />
+                          <label htmlFor="elevator" className="text-sm">Elevator</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="geyser"
+                            checked={geyser}
+                            onChange={(e) => setGeyser(e.target.checked)}
+                            className="rounded"
+                          />
+                          <label htmlFor="geyser" className="text-sm">Geyser</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="ac"
+                            checked={ac}
+                            onChange={(e) => setAc(e.target.checked)}
+                            className="rounded"
+                          />
+                          <label htmlFor="ac" className="text-sm">AC</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="parking"
+                            checked={parking}
+                            onChange={(e) => setParking(e.target.checked)}
+                            className="rounded"
+                          />
+                          <label htmlFor="parking" className="text-sm">Parking</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="images">Property Images</Label>
+                    <Input
+                      id="images"
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      ref={imageInputRef}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        const urls = files.map((f) => URL.createObjectURL(f));
+                        setPropertyImages(urls);
+                      }}
+                    />
+                    <div className="flex gap-2 flex-wrap mt-2">
+                      {propertyImages.map((img, idx) => (
+                        <img key={idx} src={img} alt="Property" className="h-16 w-16 object-cover rounded" />
+                      ))}
                     </div>
                   </div>
                   <DialogFooter>
@@ -646,6 +849,18 @@ const OwnerDashboard = () => {
                               <Badge className="absolute top-2 right-2" variant="secondary">
                                 Pending
                               </Badge>
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  className="flex-1"
+                                  variant="secondary"
+                                  onClick={() => { setSelectedPropertyForImages(property); setShowImagesDialog(true); }}
+                                >
+                                  Add Photos
+                                </Button>
+                                <Button className="flex-1" variant="outline" onClick={() => setDetailsProperty(property)}>
+                                  View Details
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -659,9 +874,139 @@ const OwnerDashboard = () => {
                         </h3>
                         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                           {approvedProperties.map((property: any) => (
-                            <PropertyCard key={property.property_id} property={property} />
+                            <div key={property.property_id}>
+                              <PropertyCard property={property} />
+                              <div className="flex gap-2 mt-2">
+                                <Button className="flex-1" variant="outline" onClick={() => setDetailsProperty(property)}>
+                                  View Details
+                                </Button>
+                                <Button
+                                  className="flex-1"
+                                  variant="secondary"
+                                  onClick={() => { setSelectedPropertyForImages(property); setShowImagesDialog(true); }}
+                                >
+                                  Add Photos
+                                </Button>
+                              </div>
+                            </div>
                           ))}
                         </div>
+                        {/* Property Details Modal */}
+                        <Dialog open={!!detailsProperty} onOpenChange={(open) => { if (!open) setDetailsProperty(null); }}>
+                          <DialogContent className="max-w-3xl">
+                            {detailsProperty && (
+                              <>
+                                <DialogHeader>
+                                  <DialogTitle className="text-2xl">{detailsProperty.address}</DialogTitle>
+                                  <DialogDescription>{detailsProperty.city}, {detailsProperty.state} {detailsProperty.zip_code}</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  {/* Image Gallery */}
+                                  <div className="w-full bg-gray-100 rounded-lg p-2">
+                                    {detailsProperty.images && detailsProperty.images.length > 0 ? (
+                                      <div className="grid grid-cols-4 gap-2">
+                                        <div className="col-span-3 row-span-2">
+                                          <img src={detailsProperty.images[0]} alt="Main" className="w-full h-64 object-cover rounded" />
+                                        </div>
+                                        {detailsProperty.images.slice(1, 5).map((img: string, idx: number) => (
+                                          <img key={idx} src={img} alt={`Property ${idx + 2}`} className="w-full h-32 object-cover rounded" />
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="w-full h-64 bg-gray-200 flex items-center justify-center text-gray-400">No Images</div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Property Info */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <span className="bg-black text-white text-xs px-2 py-1 rounded">Company-Serviced</span>
+                                        <span className="bg-green-500 text-white text-xs px-2 py-1 rounded">{detailsProperty.rating || 4.5} ★</span>
+                                        <span className="text-xs text-muted-foreground">({detailsProperty.rating_count || 0} Ratings)</span>
+                                      </div>
+                                      <h3 className="font-bold text-xl mb-2">₹{detailsProperty.price_per_room || 0}<span className="text-sm font-normal text-muted-foreground">/room/month</span></h3>
+                                      <div className="text-sm text-muted-foreground mb-4">
+                                        {detailsProperty.property_type} • {detailsProperty.zip_code}
+                                      </div>
+                                      
+                                      {/* Amenities */}
+                                      <div className="mb-4">
+                                        <h4 className="font-semibold mb-2">Amenities</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                          {detailsProperty.wifi_available && <span className="flex items-center gap-1 text-xs bg-blue-100 px-2 py-1 rounded">WiFi</span>}
+                                          {detailsProperty.amenities && Object.keys(detailsProperty.amenities).map((am, idx) => (
+                                            detailsProperty.amenities[am] ? (
+                                              <span key={idx} className="flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded">
+                                                {am.charAt(0).toUpperCase() + am.slice(1)}
+                                              </span>
+                                            ) : null
+                                          ))}
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Timings */}
+                                      {detailsProperty.timings && (
+                                        <div className="mb-4">
+                                          <h4 className="font-semibold mb-1">Timings</h4>
+                                          <p className="text-sm text-muted-foreground">{detailsProperty.timings}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    <div>
+                                      {/* Description */}
+                                      {detailsProperty.custom_specs?.description && (
+                                        <div className="mb-4">
+                                          <h4 className="font-semibold mb-2">Description</h4>
+                                          <p className="text-sm text-muted-foreground">{detailsProperty.custom_specs.description}</p>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Property Stats */}
+                                      <div className="border rounded-lg p-3">
+                                        <h4 className="font-semibold mb-2">Property Details</h4>
+                                        <div className="space-y-2 text-sm">
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Status:</span>
+                                            <span className={detailsProperty.is_approved ? "text-green-600" : "text-yellow-600"}>
+                                              {detailsProperty.is_approved ? "Approved" : "Pending Approval"}
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Type:</span>
+                                            <span>{detailsProperty.property_type}</span>
+                                          </div>
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Added on:</span>
+                                            <span>{new Date(detailsProperty.created_at).toLocaleDateString()}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </DialogContent>
+                        </Dialog>
+                        {/* Add Photos Dialog */}
+                        <Dialog open={showImagesDialog} onOpenChange={(open) => { setShowImagesDialog(open); if (!open) { setSelectedPropertyForImages(null); if (appendImagesInputRef.current) appendImagesInputRef.current.value = ""; } }}>
+                          <DialogContent className="max-w-md">
+                            <DialogHeader>
+                              <DialogTitle>Add Photos</DialogTitle>
+                              <DialogDescription>Upload additional images for this property.</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-3">
+                              <Label htmlFor="appendImages">Select Images</Label>
+                              <Input id="appendImages" type="file" multiple accept="image/*" ref={appendImagesInputRef} />
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setShowImagesDialog(false)}>Cancel</Button>
+                              <Button onClick={handleAppendImages}>Upload</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </div>
                     )}
                   </div>

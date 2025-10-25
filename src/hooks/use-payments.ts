@@ -56,7 +56,7 @@ export const useAddPaymentMethod = () => {
     mutationFn: async (paymentMethod: PaymentMethodInsert) => {
       const { data, error } = await supabase
         .from("payment_methods")
-        .insert(paymentMethod)
+        .insert(paymentMethod as any)
         .select()
         .single();
 
@@ -89,7 +89,7 @@ export const useCreateTransaction = () => {
     mutationFn: async (transaction: TransactionInsert) => {
       const { data, error } = await supabase
         .from("transactions")
-        .insert(transaction)
+        .insert(transaction as any)
         .select()
         .single();
 

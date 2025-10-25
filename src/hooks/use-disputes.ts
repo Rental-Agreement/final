@@ -50,7 +50,7 @@ export const useCreateDispute = () => {
     mutationFn: async (dispute: DisputeInsert) => {
       const { data, error } = await supabase
         .from("disputes")
-        .insert(dispute)
+        .insert(dispute as any)
         .select()
         .single();
 
@@ -81,8 +81,8 @@ export const useUpdateDispute = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: DisputeUpdate }) => {
-      const { data, error } = await supabase
+    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, any> }) => {
+      const { data, error } = await (supabase as any)
         .from("disputes")
         .update(updates)
         .eq("dispute_id", id)

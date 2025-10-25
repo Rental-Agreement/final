@@ -18,6 +18,7 @@ const Auth = () => {
   const [params] = useSearchParams();
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  // Avatar upload is now handled in the dashboard/profile, not at login
   
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
@@ -78,7 +79,7 @@ const Auth = () => {
         description: `Welcome back, ${userData.first_name} ${userData.last_name}!`,
       });
 
-      // Navigate based on role
+      // Navigate based on role (avatar upload is optional and handled later)
       switch (userData.role) {
         case "Admin":
           navigate("/admin");
@@ -116,7 +117,7 @@ const Auth = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!firstName.trim() || !lastName.trim()) {
       toast({
@@ -149,30 +150,23 @@ const Auth = () => {
             first_name: firstName,
             last_name: lastName,
             role: role,
-          }
-        }
+          },
+        },
       });
 
       if (authError) throw authError;
       if (!authData.user) throw new Error("Registration failed");
 
       // Create user profile in database
-      // Try different column names based on what your schema might have
       const profileData: any = {
         email: registerEmail,
         first_name: firstName,
         last_name: lastName,
         phone_number: phoneNumber || null,
         role: role,
-        is_approved: role === "Tenant", // Auto-approve tenants
+        is_approved: role === "Tenant",
+        auth_user_id: authData.user.id,
       };
-
-      // Try to add auth user ID with different possible column names
-      // Your schema might use one of these:
-      profileData.auth_user_id = authData.user.id;  // Most common
-      // profileData.user_id = authData.user.id;       // Alternative
-      // profileData.auth_user_id = authData.user.id;       // Alternative
-      // profileData.id = authData.user.i//d;            // Alternative
 
       const { error: profileError } = await supabase
         .from("users")
@@ -180,24 +174,24 @@ const Auth = () => {
 
       if (profileError) {
         console.error("Profile creation failed:", profileError);
-        
-        // Check if it's a schema mismatch error
-        if (profileError.message?.includes("auth_user_id") || 
-            profileError.message?.includes("schema cache") ||
-            profileError.code === 'PGRST204') {
+        if (
+          profileError.message?.includes("auth_user_id") ||
+          profileError.message?.includes("schema cache") ||
+          profileError.code === "PGRST204"
+        ) {
           throw new Error(
             "Database schema mismatch detected. Please check DATABASE_SCHEMA_FIX.md for instructions."
           );
         }
-        
         throw new Error("Failed to create user profile. Please try again.");
       }
 
       toast({
         title: "Registration Successful! 🎉",
-        description: role === "Tenant" 
-          ? "You can now log in with your credentials!"
-          : "Your account is pending admin approval. You'll be notified once approved.",
+        description:
+          role === "Tenant"
+            ? "You can now log in with your credentials!"
+            : "Your account is pending admin approval. You'll be notified once approved.",
       });
 
       // Clear form and switch to login tab
@@ -208,7 +202,6 @@ const Auth = () => {
       setLastName("");
       setPhoneNumber("");
       setRole("Tenant");
-      
     } catch (error: any) {
       console.error("Registration error:", error);
       toast({

@@ -1,3 +1,10 @@
+-- Allow authenticated users to update their own profile (avatar, etc.)
+CREATE POLICY "Allow user to update own profile" ON public.users
+FOR UPDATE
+USING (user_id = auth.uid());
+
+-- Enable RLS if not already enabled
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 -- =====================================================
 -- FIX INFINITE RECURSION IN USERS TABLE RLS POLICIES
 -- Run this in Supabase SQL Editor

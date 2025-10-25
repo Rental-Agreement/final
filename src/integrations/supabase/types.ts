@@ -1,3 +1,4 @@
+
 export type Json =
   | string
   | number
@@ -9,42 +10,62 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      favorites: {
+        Row: {
+          user_id: string;
+          property_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          property_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          property_id?: string;
+          created_at?: string;
+        };
+      };
       users: {
         Row: {
-          user_id: string
-          first_name: string
-          last_name: string
-          email: string
-          phone_number: string | null
-          role: 'Admin' | 'Owner' | 'Tenant'
-          is_approved: boolean
-          auth_user_id: string | null
-          created_at: string
-          updated_at: string
+            user_id: string
+            first_name: string
+            last_name: string
+            email: string
+            phone_number: string | null
+            role: 'Admin' | 'Owner' | 'Tenant'
+            is_approved: boolean
+            auth_user_id: string | null
+            created_at: string
+            updated_at: string
+            avatar_url?: string | null
         }
         Insert: {
-          user_id?: string
-          first_name: string
-          last_name: string
-          email: string
-          phone_number?: string | null
-          role: 'Admin' | 'Owner' | 'Tenant'
-          is_approved?: boolean
-          auth_user_id?: string | null
-          created_at?: string
-          updated_at?: string
+            user_id?: string
+            first_name: string
+            last_name: string
+            email: string
+            phone_number?: string | null
+            role: 'Admin' | 'Owner' | 'Tenant'
+            is_approved?: boolean
+            auth_user_id?: string | null
+            created_at?: string
+            updated_at?: string
+            avatar_url?: string | null
         }
         Update: {
-          user_id?: string
-          first_name?: string
-          last_name?: string
-          email?: string
-          phone_number?: string | null
-          role?: 'Admin' | 'Owner' | 'Tenant'
-          is_approved?: boolean
-          auth_user_id?: string | null
-          created_at?: string
-          updated_at?: string
+            user_id?: string
+            first_name?: string
+            last_name?: string
+            email?: string
+            phone_number?: string | null
+            role?: 'Admin' | 'Owner' | 'Tenant'
+            is_approved?: boolean
+            auth_user_id?: string | null
+            created_at?: string
+            updated_at?: string
+            avatar_url?: string | null
         }
       }
       properties: {
@@ -60,6 +81,14 @@ export type Database = {
           status: 'Available' | 'Occupied'
           created_at: string
           updated_at: string
+          images: string[] | null
+          wifi_available: boolean | null
+          timings: string | null
+          custom_specs: any | null
+          rating: number | null
+          rating_count: number | null
+          price_per_room: number | null
+          amenities: any | null
         }
         Insert: {
           property_id?: string
@@ -73,6 +102,14 @@ export type Database = {
           status?: 'Available' | 'Occupied'
           created_at?: string
           updated_at?: string
+          images?: string[] | null
+          wifi_available?: boolean | null
+          timings?: string | null
+          custom_specs?: any | null
+          rating?: number | null
+          rating_count?: number | null
+          price_per_room?: number | null
+          amenities?: any | null
         }
         Update: {
           property_id?: string
@@ -86,6 +123,14 @@ export type Database = {
           status?: 'Available' | 'Occupied'
           created_at?: string
           updated_at?: string
+          images?: string[] | null
+          wifi_available?: boolean | null
+          timings?: string | null
+          custom_specs?: any | null
+          rating?: number | null
+          rating_count?: number | null
+          price_per_room?: number | null
+          amenities?: any | null
         }
       }
       rooms: {

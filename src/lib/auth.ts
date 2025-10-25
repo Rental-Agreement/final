@@ -96,7 +96,7 @@ export const signUp = async (data: SignUpData): Promise<{ success: boolean; mess
         phone_number: data.phoneNumber || null,
         role: data.role,
         is_approved: data.role === "Tenant", // Auto-approve tenants
-      });
+      } as any);
 
     if (profileError) {
       console.error("Profile creation error:", profileError);
@@ -134,13 +134,13 @@ export const signIn = async (data: SignInData): Promise<{ success: boolean; mess
     if (!authData.user) throw new Error("Authentication failed");
 
     // Get user profile
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await (supabase as any)
       .from("users")
       .select("*")
       .eq("auth_user_id", authData.user.id)
       .single();
 
-    if (profileError) {
+    if (profileError || !profile) {
       console.error("Profile fetch error:", profileError);
       throw new Error("Failed to fetch user profile");
     }
@@ -156,7 +156,7 @@ export const signIn = async (data: SignInData): Promise<{ success: boolean; mess
 
     return {
       success: true,
-      message: `Welcome back, ${q.first_name}!`,
+      message: `Welcome back, ${profile.first_name}!`,
       profile: profile as UserProfile
     };
   } catch (error: any) {
