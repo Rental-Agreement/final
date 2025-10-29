@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Building2, LogOut, Menu, User, ChevronLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -77,6 +78,7 @@ export const DashboardLayout = ({ children, role, onBack }: DashboardLayoutProps
               <Button variant="ghost" size="icon" onClick={handleBack} title="Back">
                 <ChevronLeft className="w-5 h-5" />
               </Button>
+              <ThemeToggle />
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
                 <User className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium text-primary">{getRoleName()}</span>

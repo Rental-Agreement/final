@@ -13,7 +13,7 @@ export function RecentlyViewedSection() {
   return (
     <div className="mb-8">
       <div className="flex items-center gap-2 mb-4">
-        <Clock className="w-5 h-5 text-muted-foreground" />
+        <Clock className="w-5 h-5 text-muted-foreground animate-pulse" />
         <h2 className="text-xl font-semibold">Recently Viewed</h2>
       </div>
       
@@ -23,14 +23,16 @@ export function RecentlyViewedSection() {
           if (!property) return null;
           
           return (
-            <Card key={view.view_id} className="min-w-[280px] hover:shadow-lg transition-shadow cursor-pointer">
+            <Card key={view.view_id} className="min-w-[280px] hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer group">
               <CardContent className="p-0">
                 {property.images?.[0] && (
-                  <img
-                    src={property.images[0]}
-                    alt={property.address}
-                    className="w-full h-40 object-cover rounded-t-lg"
-                  />
+                  <div className="overflow-hidden rounded-t-lg">
+                    <img
+                      src={property.images[0]}
+                      alt={property.address}
+                      className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
                 )}
                 <div className="p-4">
                   <h3 className="font-semibold text-sm line-clamp-2 mb-2">{property.address}</h3>

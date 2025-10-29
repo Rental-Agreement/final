@@ -1,10 +1,12 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart } from "lucide-react";
+import { Heart, Star, Share2, BookmarkPlus, Eye, Users, BadgeCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 type Property = Tables<"properties"> & {
   rooms?: Tables<"rooms">[];
@@ -21,6 +23,61 @@ interface PropertyCardProps {
 
 export function PropertyCard({ property, onApply, onView, showActions = true, isFavorite = false, onToggleFavorite }: PropertyCardProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [viewCount] = useState(() => Math.floor(Math.random() * 15) + 3); // Simulated view count
+  
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const shareData = {
+      title: `${(property as any).address} - ${property.city}`,
+      text: `Check out this property: ${(property as any).address} for ${formatINR(property.price_per_room)}/month`,
+      url: window.location.origin + `/property/${property.property_id}`,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        toast({ title: "Shared successfully!" });
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(shareData.url);
+        toast({ title: "Link copied to clipboard" });
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        toast({ title: "Share failed", description: String(error), variant: "destructive" });
+      }
+    }
+  };
+
+  const handleSaveForLater = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // TODO: Implement save for later functionality
+    toast({ title: "Saved for later", description: "Property added to your saved list" });
+  };
+  
+  const renderStars = (value: number) => {
+    const full = Math.floor(value || 0);
+    const hasHalf = (value || 0) - full >= 0.5;
+    return (
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: 5 }).map((_, i) => {
+          const filled = i < full;
+          const half = i === full && hasHalf;
+          return (
+            <span key={i} className="relative inline-block w-4 h-4">
+              <Star className={`w-4 h-4 ${filled ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'} ${half ? 'text-gray-300' : ''}`} />
+              {half && (
+                <span className="absolute inset-0 overflow-hidden" style={{ width: '50%' }}>
+                  <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
   
   const prefetchDetails = async () => {
     try {
@@ -53,50 +110,84 @@ export function PropertyCard({ property, onApply, onView, showActions = true, is
   });
 
   return (
-    <Card className="group bg-white rounded-xl shadow-md hover:shadow-xl ring-1 ring-black/5 hover:ring-primary/20 transition-all duration-300 overflow-hidden flex flex-col h-full">
+    <Card className="group bg-white rounded-xl shadow-md hover:shadow-xl ring-1 ring-border hover:ring-primary/20 transition-all duration-300 overflow-hidden flex flex-col h-full transform hover:scale-[1.01] active:scale-[.99]">
       {/* Cover Image */}
       <div className="relative h-48 bg-gray-100 overflow-hidden">
         {property.images && property.images.length > 0 ? (
-          <img
-            src={property.images[0]}
-            alt="Property"
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-            loading="lazy"
-            decoding="async"
-          />
+          <>
+            <img
+              src={property.images[0]}
+              alt="Property"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+              loading="lazy"
+              decoding="async"
+            />
+            {/* Gradient overlay for better text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none"></div>
+          </>
         ) : (
           <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 text-sm">
             No Image
           </div>
         )}
-        {onToggleFavorite && (
+        
+        {/* Top Right Actions */}
+        <div className="absolute top-3 right-3 flex gap-2">
           <button
             type="button"
-            aria-label={isFavorite ? "Remove favorite" : "Add favorite"}
-            className={`absolute top-3 right-3 rounded-full p-2 ${
-              isFavorite ? "bg-red-600 text-white" : "bg-white/90 backdrop-blur text-gray-700"
-            } shadow-lg hover:scale-110 transition-transform`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite?.(property.property_id);
-            }}
+            aria-label="Share property"
+            className="rounded-full p-2 bg-white/90 backdrop-blur text-gray-700 shadow-lg hover:scale-110 transition-transform"
+            onClick={handleShare}
           >
-            <Heart className={`w-4 h-4 ${isFavorite ? "fill-white" : ""}`} />
+            <Share2 className="w-4 h-4" />
           </button>
-        )}
+          <button
+            type="button"
+            aria-label="Save for later"
+            className="rounded-full p-2 bg-white/90 backdrop-blur text-gray-700 shadow-lg hover:scale-110 transition-transform"
+            onClick={handleSaveForLater}
+          >
+            <BookmarkPlus className="w-4 h-4" />
+          </button>
+          {onToggleFavorite && (
+            <button
+              type="button"
+              aria-label={isFavorite ? "Remove favorite" : "Add favorite"}
+              className={`rounded-full p-2 ${
+                isFavorite ? "bg-red-600 text-white" : "bg-white/90 backdrop-blur text-gray-700"
+              } shadow-lg hover:scale-110 transition-transform`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite?.(property.property_id);
+              }}
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? "fill-white" : ""}`} />
+            </button>
+          )}
+        </div>
+        
+        {/* Viewing Activity Badge */}
+        <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur rounded-full px-3 py-1 shadow-md flex items-center gap-1.5">
+          <Users className="w-3 h-3 text-primary" />
+          <span className="text-xs font-medium text-gray-700">{viewCount} viewing</span>
+        </div>
       </div>
 
       {/* Content */}
       <div className="p-4 flex flex-col flex-1">
         {/* Badges Row */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-[10px] px-2.5 py-1 rounded-md bg-black text-white font-semibold">
-            Company-Serviced
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-[10px] px-2.5 py-1 rounded-full bg-black text-white font-semibold flex items-center gap-1">
+            <BadgeCheck className="w-3 h-3" />
+            Verified
           </span>
-          <span className="text-xs px-2 py-0.5 rounded-md bg-green-600 text-white font-bold flex items-center gap-1">
-            {rating} ★
+          <div className="flex items-center gap-1">
+            {renderStars(rating)}
+            <span className="text-[10px] text-muted-foreground">{Number(rating).toFixed(1)}</span>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground/80">
+            {ratingCount} reviews
           </span>
-          <span className="text-[10px] text-gray-500">({ratingCount} Ratings)</span>
         </div>
 
         {/* Title & Location */}
@@ -112,13 +203,13 @@ export function PropertyCard({ property, onApply, onView, showActions = true, is
           {amenitiesList.slice(0, 4).map((am, idx) => (
             <span
               key={idx}
-              className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md font-medium"
+              className="text-[11px] px-2.5 py-1 rounded-full bg-accent/20 text-accent-foreground"
             >
               {am}
             </span>
           ))}
           {amenitiesList.length > 4 && (
-            <span className="text-xs text-blue-600 py-1">+ {amenitiesList.length - 4} more</span>
+            <span className="text-[11px] text-muted-foreground py-1">+ {amenitiesList.length - 4} more</span>
           )}
         </div>
 

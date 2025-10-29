@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import confetti from "canvas-confetti";
 
 export type Review = {
   review_id: string;
@@ -42,6 +43,17 @@ export const useCreateReview = () => {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["reviews", vars.property_id] });
       qc.invalidateQueries({ queryKey: ["properties"] });
+      
+      // Trigger confetti animation for positive reviews
+      if (vars.rating >= 4) {
+        confetti({
+          particleCount: 50,
+          spread: 50,
+          origin: { y: 0.7 },
+          colors: ['#fbbf24', '#f59e0b', '#d97706']
+        });
+      }
+      
       toast({ title: "Review submitted", description: "Thanks for your feedback!" });
     },
     onError: (err: any) => {

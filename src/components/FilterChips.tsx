@@ -89,12 +89,12 @@ export function FilterChips({ filters, onRemoveFilter, onClearAll }: FilterChips
         <Badge
           key={chip.key}
           variant="secondary"
-          className="gap-1 pr-1 cursor-pointer hover:bg-secondary/80"
+          className="gap-1 pr-1 cursor-pointer hover:bg-secondary/80 hover:scale-105 transition-all duration-200 rounded-full h-6 px-3 py-0 text-xs"
         >
           {chip.label}
           <button
             onClick={() => onRemoveFilter(chip.key)}
-            className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
+            className="ml-1 hover:bg-destructive/20 rounded-full p-0.5 transition-colors duration-200"
           >
             <X className="w-3 h-3" />
           </button>

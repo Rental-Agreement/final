@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Home, CreditCard, FileText, AlertCircle, Search, Building2, Calendar, DollarSign, Filter } from "lucide-react";
+import { Home, CreditCard, FileText, AlertCircle, Search, Building2, Calendar, DollarSign, Filter, Star } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTenantLeases } from "@/hooks/use-leases";
 import { usePaymentMethods, useLeaseTransactions } from "@/hooks/use-payments";
@@ -33,11 +34,27 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { formatINR } from "@/lib/utils";
 import { PropertyComparisonModal } from "@/components/PropertyComparisonModal";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { RecentlyViewedSection } from "@/components/RecentlyViewedSection";
 import { SaveSearchDialog } from "@/components/SaveSearchDialog";
 import { FilterChips } from "@/components/FilterChips";
 import { ImageCarouselWithThumbnails } from "@/components/ImageCarouselWithThumbnails";
 import { useTrackPropertyView } from "@/hooks/use-property-views";
+import confetti from "canvas-confetti";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
+import { QuickFilters } from "@/components/QuickFilters";
+import { HelpWidget } from "@/components/HelpWidget";
+import { BackToTop } from "@/components/BackToTop";
+import { EmptyState } from "@/components/EmptyState";
+import { PropertyCardSkeleton } from "@/components/PropertyCardSkeleton";
+import { ErrorState } from "@/components/ErrorState";
+import { VirtualTour } from "@/components/VirtualTour";
+import { NeighborhoodGuide } from "@/components/NeighborhoodGuide";
+import { TransportationScore } from "@/components/TransportationScore";
+import { SimilarPropertiesCarousel } from "@/components/SimilarPropertiesCarousel";
+import { PropertyQA } from "@/components/PropertyQA";
+import { BookingTimeline } from "@/components/BookingTimeline";
 
 const TenantDashboard = () => {
   const { profile } = useAuth();
@@ -65,6 +82,21 @@ const TenantDashboard = () => {
   const [breakfastIncluded, setBreakfastIncluded] = useState(false);
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | undefined>(undefined);
   const debouncedSearch = useDebounce(searchText, 350);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const resetAllFilters = () => {
+    setSearchText("");
+    setSearchCity("");
+    setSearchType("All");
+    setPriceRange([0, 50000]);
+    setMinRating("0");
+    setStarsMin("0");
+    setFreeCancellation(false);
+    setPayAtProperty(false);
+    setBreakfastIncluded(false);
+    setMaxDistanceKm(undefined);
+    setSortBy("rating_desc");
+    setAmenities({ wifi: false, elevator: false, geyser: false, ac: false, parking: false });
+  };
   
   // Lease application state
   const [selectedPropertyId, setSelectedPropertyId] = useState("");
@@ -84,7 +116,12 @@ const TenantDashboard = () => {
   const [disputeDescription, setDisputeDescription] = useState("");
   
   // Fetch data
-  const { data: properties = [], isLoading: loadingProperties } = useProperties({
+  const { 
+    data: properties = [], 
+    isLoading: loadingProperties, 
+    error: propertiesError,
+    refetch: refetchProperties 
+  } = useProperties({
     city: searchCity || undefined,
     type: searchType,
     search: debouncedSearch || undefined,
@@ -99,11 +136,97 @@ const TenantDashboard = () => {
     maxDistanceKm,
     sort: sortBy,
   });
-  const { data: leases = [], isLoading: loadingLeases } = useTenantLeases(profile?.user_id || "");
+  
+  // Pull-to-refresh
+  const { scrollContainerRef, isRefreshing, pullDistance } = usePullToRefresh({
+    onRefresh: async () => {
+      await refetchProperties();
+      await refetchFavorites();
+    },
+    threshold: 80,
+    enabled: activeTab === "overview",
+  });
+  
+  const {
+    data: leases = [],
+    isLoading: loadingLeases,
+    error: leasesError,
+  } = useTenantLeases(profile?.user_id || "");
   const { data: paymentMethods = [] } = usePaymentMethods(profile?.user_id || "");
   const { data: transactions = [] } = useLeaseTransactions(selectedLeaseForPayment || (leases as any)[0]?.lease_id || "");
   const { data: disputes = [] } = useAllDisputes();
   const { data: favorites = [], refetch: refetchFavorites, isFetching: isFetchingFavorites } = useFavorites(profile?.user_id || "");
+  const queryClient = useQueryClient();
+  
+  // Optimistic UI mutation for favorites
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: async ({ propertyId, shouldAdd }: { propertyId: string; shouldAdd: boolean }) => {
+      if (!profile?.user_id) throw new Error("Not authenticated");
+      
+      if (shouldAdd) {
+        const { error } = await (supabase as any)
+          .from('favorites')
+          .insert({ user_id: profile.user_id, property_id: propertyId });
+        if (error) throw error;
+      } else {
+        const favorite = favorites.find((f: any) => f.property_id === propertyId);
+        if (favorite) {
+          const { error } = await supabase
+            .from("favorites")
+            .delete()
+            .eq("user_id", profile.user_id)
+            .eq("property_id", propertyId);
+          if (error) throw error;
+        }
+      }
+    },
+    onMutate: async ({ propertyId, shouldAdd }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["favorites", profile?.user_id] });
+      
+      // Snapshot previous value
+      const previousFavorites = queryClient.getQueryData(["favorites", profile?.user_id]);
+      
+      // Optimistically update
+      queryClient.setQueryData(["favorites", profile?.user_id], (old: any) => {
+        if (!old) return old;
+        if (shouldAdd) {
+          // Add new favorite
+          return [...old, { user_id: profile?.user_id, property_id: propertyId, property: null }];
+        } else {
+          // Remove favorite
+          return old.filter((f: any) => f.property_id !== propertyId);
+        }
+      });
+      
+      return { previousFavorites };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousFavorites) {
+        queryClient.setQueryData(["favorites", profile?.user_id], context.previousFavorites);
+      }
+      toast({ 
+        title: "Favorite action failed", 
+        description: err instanceof Error ? err.message : String(err), 
+        variant: "destructive" 
+      });
+    },
+    onSuccess: (_, { shouldAdd }) => {
+      toast({ 
+        title: shouldAdd ? "Added to favorites" : "Removed from favorites", 
+        description: shouldAdd 
+          ? "Property added to your favorites." 
+          : "Property removed from your favorites.",
+        variant: "default"
+      });
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["favorites", profile?.user_id] });
+    },
+  });
+  
   // Property details modal state
   const [detailsProperty, setDetailsProperty] = useState<any | null>(null);
   const [showApplyForm, setShowApplyForm] = useState(false);
@@ -114,29 +237,8 @@ const TenantDashboard = () => {
   // Add/remove favorite logic
   const handleToggleFavorite = async (propertyId: string) => {
     if (!profile?.user_id) return;
-    const favorite = favorites.find((f: any) => f.property_id === propertyId);
-    try {
-      if (favorite) {
-        // Remove favorite
-        const { error } = await supabase
-          .from("favorites")
-          .delete()
-          .eq("user_id", profile.user_id)
-          .eq("property_id", propertyId);
-        if (error) throw error;
-        toast({ title: "Removed from favorites", description: "Property removed from your favorites." });
-      } else {
-        // Add favorite
-          const { error } = await (supabase as any)
-            .from('favorites')
-            .insert({ user_id: profile.user_id, property_id: propertyId });
-        if (error) throw error;
-        toast({ title: "Added to favorites", description: "Property added to your favorites." });
-      }
-      refetchFavorites();
-    } catch (err: any) {
-      toast({ title: "Favorite action failed", description: err.message || String(err), variant: "destructive" });
-    }
+    const isFavorite = favorites.some((f: any) => f.property_id === propertyId);
+    toggleFavoriteMutation.mutate({ propertyId, shouldAdd: !isFavorite });
   };
 
   // Already filtered by backend; keep as-is for rendering
@@ -178,6 +280,13 @@ const TenantDashboard = () => {
 
       if (error) throw error;
 
+      // Trigger confetti animation
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+
       toast({
         title: "Application Submitted! 🎉",
         description: "Your lease application has been submitted and is pending approval.",
@@ -203,8 +312,8 @@ const TenantDashboard = () => {
   const handleMakePayment = async () => {
     if (!selectedLeaseForPayment || !paymentAmount || !selectedPaymentMethod) {
       toast({
-        title: "Validation Error",
-        description: "Please fill in all payment details",
+        title: "Missing Details",
+        description: "Select a lease, enter amount, and choose a payment method.",
         variant: "destructive",
       });
       return;
@@ -215,13 +324,20 @@ const TenantDashboard = () => {
         .from("transactions")
         .insert({
           lease_id: selectedLeaseForPayment,
-          amount: parseFloat(paymentAmount),
-          payment_date: new Date().toISOString().split('T')[0],
+          amount: Number(paymentAmount),
           payment_method_id: selectedPaymentMethod,
           status: 'Completed',
         } as any);
 
       if (error) throw error;
+
+      // Trigger confetti animation
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.6 },
+        colors: ['#4ade80', '#22c55e', '#16a34a']
+      });
 
       toast({
         title: "Payment Successful! 💰",
@@ -440,9 +556,79 @@ const TenantDashboard = () => {
 
           {/* Browse Properties Tab */}
           <TabsContent value="browse" className="space-y-4">
+            <div ref={scrollContainerRef} className="relative overflow-y-auto">
+              <PullToRefreshIndicator
+                pullDistance={pullDistance}
+                isRefreshing={isRefreshing}
+                threshold={80}
+              />
             {/* Sticky Filters Bar */}
             <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b py-1">
-              <div className="flex flex-wrap items-center gap-2 max-w-7xl mx-auto px-2">
+              {/* Mobile Filters Bar */}
+              <div className="md:hidden max-w-7xl mx-auto px-2 flex items-center gap-2">
+                <Search className="w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="h-8 text-sm flex-1" />
+                <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8">Filters</Button>
+                  </SheetTrigger>
+                  <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto">
+                    <SheetHeader>
+                      <SheetTitle>Filters</SheetTitle>
+                    </SheetHeader>
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                      <div className="col-span-2">
+                        <Label className="text-xs">City</Label>
+                        <Input placeholder="City" value={searchCity} onChange={(e) => setSearchCity(e.target.value)} className="h-9" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Type</Label>
+                        <Select value={searchType} onValueChange={setSearchType}><SelectTrigger className="h-9"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="All">All Types</SelectItem><SelectItem value="Flat">Flat</SelectItem><SelectItem value="PG">PG</SelectItem><SelectItem value="Hostel">Hostel</SelectItem></SelectContent></Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Sort</Label>
+                        <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}><SelectTrigger className="h-9"><SelectValue placeholder="Sort" /></SelectTrigger><SelectContent><SelectItem value="rating_desc">Top rated</SelectItem><SelectItem value="price_asc">Price: Low to High</SelectItem><SelectItem value="price_desc">Price: High to Low</SelectItem><SelectItem value="distance_asc">Distance: Closest</SelectItem><SelectItem value="newest">Newest</SelectItem></SelectContent></Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Min Rating</Label>
+                        <Select value={minRating} onValueChange={setMinRating}><SelectTrigger className="h-9"><SelectValue placeholder="Min Rating" /></SelectTrigger><SelectContent><SelectItem value="0">Any</SelectItem><SelectItem value="3">3.0+</SelectItem><SelectItem value="4">4.0+</SelectItem><SelectItem value="4.5">4.5+</SelectItem></SelectContent></Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Stars</Label>
+                        <Select value={starsMin} onValueChange={setStarsMin}><SelectTrigger className="h-9"><SelectValue placeholder="Stars" /></SelectTrigger><SelectContent><SelectItem value="0">Any</SelectItem><SelectItem value="1">1★+</SelectItem><SelectItem value="2">2★+</SelectItem><SelectItem value="3">3★+</SelectItem><SelectItem value="4">4★+</SelectItem><SelectItem value="5">5★</SelectItem></SelectContent></Select>
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Price Range ₹{priceRange[0]} - ₹{priceRange[1]}</Label>
+                        <Slider min={0} max={100000} step={500} value={priceRange} onValueChange={setPriceRange} className="mt-2" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Max Distance: {typeof maxDistanceKm === 'number' ? `${maxDistanceKm}km` : 'Any'}</Label>
+                        <Slider min={1} max={25} step={0.5} value={[typeof maxDistanceKm === 'number' ? maxDistanceKm : 10]} onValueChange={(v) => setMaxDistanceKm(v?.[0])} className="mt-2" />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Amenities</Label>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          {(["wifi","ac","geyser","elevator","parking"] as const).map((key) => (
+                            <label key={key} className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
+                              <Checkbox checked={amenities[key]} onCheckedChange={(v) => setAmenities((prev) => ({ ...prev, [key]: Boolean(v) }))} />
+                              <span className="capitalize">{key}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-6">
+                      <Button variant="outline" onClick={() => { resetAllFilters(); setFiltersOpen(false); }}>Clear filters</Button>
+                      <div className="flex gap-2">
+                        <SaveSearchDialog currentFilters={{ city: searchCity, type: searchType, search: debouncedSearch, minPrice: priceRange[0], maxPrice: priceRange[1], minRating: Number(minRating), amenities: Object.entries(amenities).filter(([_, v]) => v).map(([k]) => k), starsMin: Number(starsMin), freeCancellation, payAtProperty, breakfastIncluded, maxDistanceKm, sort: sortBy }} />
+                        <Button onClick={() => setFiltersOpen(false)}>Apply</Button>
+                      </div>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+              {/* Desktop Filters Row */}
+              <div className="hidden md:flex flex-wrap items-center gap-2 max-w-7xl mx-auto px-2">
                 <Search className="w-4 h-4 text-muted-foreground" />
                 <Input placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="w-32 sm:w-40 md:w-48 h-8 text-sm" />
                 <Input placeholder="City" value={searchCity} onChange={(e) => setSearchCity(e.target.value)} className="w-24 h-8 text-sm" />
@@ -486,7 +672,7 @@ const TenantDashboard = () => {
                     </div>
                   </PopoverContent>
                 </Popover>
-                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setSearchText(""); setSearchCity(""); setSearchType("All"); setPriceRange([0,50000]); setMinRating("0"); setStarsMin("0"); setFreeCancellation(false); setPayAtProperty(false); setBreakfastIncluded(false); setMaxDistanceKm(undefined); setSortBy("rating_desc"); setAmenities({wifi:false,elevator:false,geyser:false,ac:false,parking:false}); }}>
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={resetAllFilters}>
                   Reset
                 </Button>
                 <SaveSearchDialog
@@ -560,32 +746,51 @@ const TenantDashboard = () => {
               />
             </div>
 
+            {/* Quick Filters */}
+            <div className="max-w-7xl mx-auto px-2 mb-4">
+              <QuickFilters
+                onFilterClick={(filter) => {
+                  if (filter === "wifi") setAmenities(prev => ({ ...prev, wifi: !prev.wifi }));
+                  else if (filter === "pet_friendly") toast({ title: "Coming soon", description: "Pet-friendly filter will be available soon" });
+                  else if (filter === "parking") setAmenities(prev => ({ ...prev, parking: !prev.parking }));
+                  else if (filter === "breakfast") setBreakfastIncluded(!breakfastIncluded);
+                  else if (filter === "new") setSortBy("newest");
+                  else if (filter === "entire_place") setSearchType("Flat");
+                }}
+                activeFilters={[
+                  ...(amenities.wifi ? ["wifi"] : []),
+                  ...(amenities.parking ? ["parking"] : []),
+                  ...(breakfastIncluded ? ["breakfast"] : []),
+                  ...(sortBy === "newest" ? ["new"] : []),
+                  ...(searchType === "Flat" ? ["entire_place"] : []),
+                ]}
+              />
+            </div>
+
             {/* Recently Viewed Section */}
 
             {/* Results */}
             <div className="mb-6 max-w-7xl mx-auto">
-              {loadingProperties ? (
+              {propertiesError ? (
+                <ErrorState
+                  type="network"
+                  message="Failed to load properties. Please check your connection."
+                  onRetry={() => refetchProperties()}
+                />
+              ) : loadingProperties ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {[1,2,3,4,5,6].map((i) => (
-                    <div key={i} className="bg-white rounded-xl shadow-md h-full">
-                      <Skeleton className="h-48 w-full rounded-t-xl" />
-                      <div className="p-4 space-y-3">
-                        <Skeleton className="h-4 w-1/3" />
-                        <Skeleton className="h-6 w-2/3" />
-                        <Skeleton className="h-4 w-1/2" />
-                        <div className="flex gap-2">
-                          <Skeleton className="h-9 w-24" />
-                          <Skeleton className="h-9 w-24" />
-                        </div>
-                      </div>
-                    </div>
+                  {[1,2,3,4,5,6,7,8].map((i) => (
+                    <PropertyCardSkeleton key={i} />
                   ))}
                 </div>
               ) : filteredProperties.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Building2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No properties found matching your criteria</p>
-                </div>
+                <EmptyState
+                  type="no-results"
+                  onClearFilters={() => {
+                    setSearchText(""); setSearchCity(""); setSearchType("All"); setPriceRange([0,50000]); setMinRating("0"); setStarsMin("0"); setFreeCancellation(false); setPayAtProperty(false); setBreakfastIncluded(false); setMaxDistanceKm(undefined); setSortBy("rating_desc"); setAmenities({wifi:false,elevator:false,geyser:false,ac:false,parking:false});
+                  }}
+                  onAction={() => setActiveTab("browse")}
+                />
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {filteredProperties.map((property: any) => {
@@ -608,12 +813,13 @@ const TenantDashboard = () => {
                 </div>
               )}
             </div>
-          </TabsContent>
+
           {/* Property Details Modal */}
           <Dialog open={!!detailsProperty} onOpenChange={(open) => { if (!open) { setDetailsProperty(null); setShowApplyForm(false); } }}>
             <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 sm:p-0">
               {detailsProperty && (
-                <div className="w-full h-full overflow-y-auto">
+                <>
+                <div className="w-full h-full overflow-y-auto pb-20 sm:pb-0">
                   {/* Sticky Image Carousel Section with Thumbnails */}
                   <div className="relative bg-black/5 pt-6 pb-2">
                     <ImageCarouselWithThumbnails 
@@ -656,8 +862,28 @@ const TenantDashboard = () => {
                         <div className="flex items-center gap-3">
                           <span className="bg-black text-white text-xs px-2 py-1 rounded">Company-Serviced</span>
                           <div className="flex items-center gap-2">
-                            <span className="bg-green-600 text-white px-3 py-1 rounded font-bold">{detailsProperty.rating || 4.5} ★</span>
-                            <span className="text-sm text-muted-foreground">{detailsProperty.rating_count || 0} Ratings</span>
+                            {/* Star rating with half star support */}
+                            <div className="flex items-center gap-0.5">
+                              {Array.from({ length: 5 }).map((_, i) => {
+                                const value = Number(detailsProperty.rating || 4.5);
+                                const full = Math.floor(value);
+                                const hasHalf = value - full >= 0.5;
+                                const filled = i < full;
+                                const half = i === full && hasHalf;
+                                return (
+                                  <span key={i} className="relative inline-block w-4 h-4">
+                                    <Star className={`w-4 h-4 ${filled ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'} ${half ? 'text-gray-300' : ''}`} />
+                                    {half && (
+                                      <span className="absolute inset-0 overflow-hidden" style={{ width: '50%' }}>
+                                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                                      </span>
+                                    )}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{Number(detailsProperty.rating || 4.5).toFixed(1)}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground/80">{detailsProperty.rating_count || 0} reviews</span>
                           </div>
                         </div>
                       </div>
@@ -819,7 +1045,13 @@ const TenantDashboard = () => {
                           <div>
                             <h2 className="text-xl sm:text-2xl font-bold mb-4">Reviews</h2>
                             {reviews.length === 0 ? (
-                              <p className="text-muted-foreground">No reviews yet. Be the first to review.</p>
+                              <div className="text-center py-6">
+                                <div className="mx-auto mb-2 w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center">⭐</div>
+                                <p className="text-sm text-muted-foreground mb-3">No reviews yet. Be the first to review.</p>
+                                <Button size="sm" onClick={() => {
+                                  document.getElementById('review-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }}>Write a review</Button>
+                              </div>
                             ) : (
                               <div className="space-y-3">
                                 {reviews.slice(0, 5).map((rev: any) => (
@@ -835,7 +1067,7 @@ const TenantDashboard = () => {
                             )}
 
                             {/* Add Review */}
-                            <div className="mt-4 border-t pt-4 space-y-2">
+                            <div id="review-form" className="mt-4 border-t pt-4 space-y-2">
                               <Label htmlFor="rating" className="text-sm">Your rating</Label>
                               <Select value={newRating} onValueChange={setNewRating}>
                                 <SelectTrigger>
@@ -865,6 +1097,64 @@ const TenantDashboard = () => {
                                 Submit Review
                               </Button>
                             </div>
+                          </div>
+
+                          {/* Virtual Tour */}
+                          <div className="space-y-4">
+                            <VirtualTour
+                              propertyName={detailsProperty.address || "Property"}
+                              videoUrl={detailsProperty.virtual_tour_video}
+                              images360={detailsProperty.images_360}
+                            />
+                          </div>
+
+                          {/* Neighborhood Guide */}
+                          <div className="space-y-4">
+                            <NeighborhoodGuide
+                              propertyAddress={`${detailsProperty.address}, ${detailsProperty.city}`}
+                            />
+                          </div>
+
+                          {/* Transportation Score */}
+                          <div className="space-y-4">
+                            <TransportationScore
+                              propertyAddress={`${detailsProperty.address}, ${detailsProperty.city}`}
+                              walkScore={detailsProperty.walk_score}
+                              transitScore={detailsProperty.transit_score}
+                              bikeScore={detailsProperty.bike_score}
+                            />
+                          </div>
+
+                          {/* Q&A Section */}
+                          <div className="space-y-4">
+                            <PropertyQA
+                              propertyId={detailsProperty.property_id}
+                              ownerId={detailsProperty.owner_id}
+                            />
+                          </div>
+
+                          {/* Booking Timeline */}
+                          {leaseStart && leaseEnd && (
+                            <div className="space-y-4">
+                              <BookingTimeline
+                                checkInDate={leaseStart}
+                                checkOutDate={leaseEnd}
+                                status="upcoming"
+                              />
+                            </div>
+                          )}
+
+                          {/* Similar Properties Carousel */}
+                          <div className="space-y-4">
+                            <SimilarPropertiesCarousel
+                              currentPropertyId={detailsProperty.property_id}
+                              currentCity={detailsProperty.city}
+                              currentType={detailsProperty.property_type}
+                              onPropertyClick={(propertyId) => {
+                                const similarProp = properties.find((p: any) => p.property_id === propertyId);
+                                if (similarProp) setDetailsProperty(similarProp);
+                              }}
+                            />
                           </div>
                         </div>
 
@@ -974,9 +1264,24 @@ const TenantDashboard = () => {
                       </div>
                     </div>
                   </div>
+                  {/* Mobile Sticky Bottom CTA */}
+                  <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-3">
+                    <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-base font-bold">{formatINR(detailsProperty.price_per_room || 0)}</div>
+                        <div className="text-xs text-muted-foreground">per room / month</div>
+                      </div>
+                      <Button className="btn-gradient px-5" onClick={() => setShowApplyForm(true)}>
+                        Book Now
+                      </Button>
+                    </div>
+                </div>
+                </>
               )}
             </DialogContent>
           </Dialog>
+            </div>
+          </TabsContent>
 
           {/* My Leases Tab */}
           <TabsContent value="leases" className="space-y-4">
@@ -1225,8 +1530,13 @@ const TenantDashboard = () => {
           </TabsContent>
         </Tabs>
       </div>
+      
       {/* Property Comparison Modal (fixed at bottom when items added) */}
       <PropertyComparisonModal />
+      
+      {/* Floating Widgets */}
+      <HelpWidget />
+      <BackToTop />
     </DashboardLayout>
   );
 };

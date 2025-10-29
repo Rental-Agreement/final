@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ImageCarouselWithThumbnailsProps {
   images: string[];
@@ -11,20 +12,24 @@ export function ImageCarouselWithThumbnails({ images, alt }: ImageCarouselWithTh
   const [currentIndex, setCurrentIndex] = useState(0);
   const mainImageRef = useRef<HTMLDivElement>(null);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
+  const [imageLoading, setImageLoading] = useState(true);
 
   if (!images || images.length === 0) {
     return <div className="w-full h-96 bg-gray-200 flex items-center justify-center">No images</div>;
   }
 
   const goToNext = () => {
+    setImageLoading(true);
     setCurrentIndex((prev) => (prev + 1) % images.length);
   };
 
   const goToPrev = () => {
+    setImageLoading(true);
     setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
   const goToIndex = (index: number) => {
+    setImageLoading(true);
     setCurrentIndex(index);
   };
 
@@ -53,11 +58,13 @@ export function ImageCarouselWithThumbnails({ images, alt }: ImageCarouselWithTh
     <div className="w-full" onKeyDown={handleKeyDown} tabIndex={0} ref={mainImageRef}>
       {/* Main Image */}
       <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden group">
+        {imageLoading && <Skeleton className="absolute inset-0 h-full w-full" />}
         <img
           src={images[currentIndex]}
           alt={`${alt} - Image ${currentIndex + 1}`}
-          className="w-full h-full object-cover transition-transform duration-300"
+          className={`w-full h-full object-cover transition-all duration-500 ${imageLoading ? 'scale-105 blur-md' : 'scale-100 blur-0'}`}
           loading={currentIndex === 0 ? "eager" : "lazy"}
+          onLoad={() => setImageLoading(false)}
         />
         
         {/* Navigation Arrows */}

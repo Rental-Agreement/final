@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Shield, ArrowRight, Check, ChevronDown, X } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Link } from "react-router-dom";
 import { useProperties } from "@/hooks/use-properties";
 import { PropertyCard } from "@/components/PropertyCard";
@@ -69,6 +70,7 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-background">
       {/* Top-right Auth Buttons */}
       <div className="container mx-auto px-4 pt-4 flex justify-end gap-2">
+        <ThemeToggle />
         <Link to="/auth?tab=signin">
           <Button variant="outline" size="sm">Login</Button>
         </Link>

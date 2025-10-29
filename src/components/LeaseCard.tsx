@@ -41,7 +41,7 @@ export function LeaseCard({ lease, onViewDetails, onPayRent, showActions = true 
   const billingCycle = (lease as any).billing_cycle ?? "Monthly";
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
       <CardContent className="pt-6">
         <div className="flex justify-between items-start mb-4">
           <div>
