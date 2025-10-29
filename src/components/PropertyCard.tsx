@@ -53,93 +53,124 @@ export function PropertyCard({ property, onApply, onView, showActions = true, is
   });
 
   return (
-    <Card className="group relative overflow-hidden max-w-2xl mx-auto flex rounded-2xl shadow-xl ring-1 ring-primary/10 hover:ring-primary/20 card-hover shine">
-      {/* Left: Single cover image */}
-      <div className="relative w-2/5 bg-gray-100 flex items-center justify-center">
+    <Card className="group bg-white rounded-xl shadow-md hover:shadow-xl ring-1 ring-black/5 hover:ring-primary/20 transition-all duration-300 overflow-hidden flex flex-col h-full">
+      {/* Cover Image */}
+      <div className="relative h-48 bg-gray-100 overflow-hidden">
         {property.images && property.images.length > 0 ? (
           <img
             src={property.images[0]}
-            alt="Cover"
-            className="w-full h-48 object-cover img-zoom"
+            alt="Property"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
             loading="lazy"
             decoding="async"
-            sizes="(max-width: 768px) 100vw, 40vw"
           />
         ) : (
-          <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-400">No Image</div>
+          <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 text-sm">
+            No Image
+          </div>
         )}
         {onToggleFavorite && (
           <button
             type="button"
             aria-label={isFavorite ? "Remove favorite" : "Add favorite"}
-            className={`absolute top-2 right-2 rounded-full p-2 ${isFavorite ? "bg-red-600 text-white" : "bg-white text-gray-600"} shadow`}
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite?.(property.property_id); }}
+            className={`absolute top-3 right-3 rounded-full p-2 ${
+              isFavorite ? "bg-red-600 text-white" : "bg-white/90 backdrop-blur text-gray-700"
+            } shadow-lg hover:scale-110 transition-transform`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite?.(property.property_id);
+            }}
           >
             <Heart className={`w-4 h-4 ${isFavorite ? "fill-white" : ""}`} />
           </button>
         )}
       </div>
-      {/* Right: Details */}
-      <div className="w-3/5 p-5 flex flex-col justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary border border-primary/20">Company-Serviced</span>
-            {typeof stars === 'number' && stars > 0 && (
-              <span className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800 border border-yellow-200" aria-label={`${stars} star property`}>
-                {"★".repeat(Math.min(5, Math.max(1, stars)))}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="font-bold text-xl gradient-text">{(property as any).address}</span>
-            <span className="text-muted-foreground">{property.city}, {property.state}</span>
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs px-2 py-1 rounded bg-green-600 text-white shadow">{rating} ★</span>
-            <span className="text-xs text-muted-foreground">({ratingCount} Ratings)</span>
-          </div>
-          {(property as any).distance_to_center_km && (
-            <div className="text-xs text-muted-foreground mb-2">
-              {(property as any).neighborhood ? <span className="font-medium">{(property as any).neighborhood}</span> : null}
-              {((property as any).neighborhood ? ' • ' : '') + `${(property as any).distance_to_center_km} km from centre`}
-            </div>
+
+      {/* Content */}
+      <div className="p-4 flex flex-col flex-1">
+        {/* Badges Row */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-[10px] px-2.5 py-1 rounded-md bg-black text-white font-semibold">
+            Company-Serviced
+          </span>
+          <span className="text-xs px-2 py-0.5 rounded-md bg-green-600 text-white font-bold flex items-center gap-1">
+            {rating} ★
+          </span>
+          <span className="text-[10px] text-gray-500">({ratingCount} Ratings)</span>
+        </div>
+
+        {/* Title & Location */}
+        <h3 className="font-bold text-lg text-gray-900 mb-1 line-clamp-1" title={(property as any).address}>
+          {(property as any).address}
+        </h3>
+        <p className="text-sm text-gray-600 mb-3">
+          {property.city}, {property.state}
+        </p>
+
+        {/* Amenities */}
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {amenitiesList.slice(0, 4).map((am, idx) => (
+            <span
+              key={idx}
+              className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md font-medium"
+            >
+              {am}
+            </span>
+          ))}
+          {amenitiesList.length > 4 && (
+            <span className="text-xs text-blue-600 py-1">+ {amenitiesList.length - 4} more</span>
           )}
-          <div className="flex flex-wrap gap-2 mb-2">
+        </div>
+
+        {/* Special offers */}
+        {((property as any).free_cancellation || (property as any).breakfast_included) && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {(property as any).free_cancellation && (
-              <span className="text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Free cancellation</span>
-            )}
-            {(property as any).pay_at_property && (
-              <span className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200">Pay at property</span>
+              <span className="text-[10px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Free cancellation
+              </span>
             )}
             {(property as any).breakfast_included && (
-              <span className="text-xs px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200">Breakfast included</span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {amenitiesList.slice(0, 5).map((am, idx) => (
-              <span key={idx} className="flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded">
-                {am}
+              <span className="text-[10px] px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                Breakfast
               </span>
-            ))}
-            {amenitiesList.length > 5 && (
-              <span className="text-xs text-blue-600">+ {amenitiesList.length - 5} more</span>
             )}
           </div>
-          <div className="font-bold text-lg text-primary mb-1">{formatINR(price)}</div>
-          <div className="text-xs text-muted-foreground mb-2">per room per month</div>
+        )}
+
+        {/* Spacer to push price and buttons to bottom */}
+        <div className="flex-1"></div>
+
+        {/* Price */}
+        <div className="mb-3">
+          <div className="font-bold text-xl text-primary">{formatINR(price)}</div>
+          <div className="text-xs text-gray-500">per room per month</div>
         </div>
-        <div className="flex gap-2 mt-2" onMouseEnter={prefetchDetails} onFocus={prefetchDetails}>
-          {onView && (
-            <Button variant="outline" className="w-full" onClick={() => onView(property.property_id)}>
-              View Details
-            </Button>
-          )}
-          {onApply && (
-            <Button className="w-full btn-gradient text-white font-bold" onClick={() => onApply(property.property_id)}>
-              Book Now
-            </Button>
-          )}
-        </div>
+
+        {/* Action Buttons */}
+        {showActions && (onView || onApply) && (
+          <div className="flex gap-2" onMouseEnter={prefetchDetails} onFocus={prefetchDetails}>
+            {onView && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 h-9 text-sm font-medium"
+                onClick={() => onView(property.property_id)}
+              >
+                View Details
+              </Button>
+            )}
+            {onApply && (
+              <Button
+                size="sm"
+                className="flex-1 h-9 text-sm font-bold btn-gradient text-white"
+                onClick={() => onApply(property.property_id)}
+              >
+                Book Now
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </Card>
   );

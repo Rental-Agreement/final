@@ -32,6 +32,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { formatINR } from "@/lib/utils";
 import { PropertyComparisonModal } from "@/components/PropertyComparisonModal";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { RecentlyViewedSection } from "@/components/RecentlyViewedSection";
 import { SaveSearchDialog } from "@/components/SaveSearchDialog";
 import { FilterChips } from "@/components/FilterChips";
@@ -440,131 +441,71 @@ const TenantDashboard = () => {
           {/* Browse Properties Tab */}
           <TabsContent value="browse" className="space-y-4">
             {/* Sticky Filters Bar */}
-            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b py-3">
-              <div className="grid lg:grid-cols-6 md:grid-cols-3 gap-3 max-w-7xl mx-auto px-2">
-                <div className="col-span-2 flex items-center gap-2">
-                  <Search className="w-4 h-4 text-muted-foreground" />
-                  <Input placeholder="Search address, area, state..." value={searchText} onChange={(e) => setSearchText(e.target.value)} />
+            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b py-1">
+              <div className="flex flex-wrap items-center gap-2 max-w-7xl mx-auto px-2">
+                <Search className="w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="w-32 sm:w-40 md:w-48 h-8 text-sm" />
+                <Input placeholder="City" value={searchCity} onChange={(e) => setSearchCity(e.target.value)} className="w-24 h-8 text-sm" />
+                <Select value={searchType} onValueChange={setSearchType}><SelectTrigger className="h-8 text-sm w-28"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="All">All Types</SelectItem><SelectItem value="Flat">Flat</SelectItem><SelectItem value="PG">PG</SelectItem><SelectItem value="Hostel">Hostel</SelectItem></SelectContent></Select>
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}><SelectTrigger className="h-8 text-sm w-28"><SelectValue placeholder="Sort" /></SelectTrigger><SelectContent><SelectItem value="rating_desc">Top rated</SelectItem><SelectItem value="price_asc">Price: Low to High</SelectItem><SelectItem value="price_desc">Price: High to Low</SelectItem><SelectItem value="distance_asc">Distance: Closest</SelectItem><SelectItem value="newest">Newest</SelectItem></SelectContent></Select>
+                <Select value={minRating} onValueChange={setMinRating}><SelectTrigger className="h-8 text-sm w-20"><SelectValue placeholder="Min Rating" /></SelectTrigger><SelectContent><SelectItem value="0">Any</SelectItem><SelectItem value="3">3.0+</SelectItem><SelectItem value="4">4.0+</SelectItem><SelectItem value="4.5">4.5+</SelectItem></SelectContent></Select>
+                <Select value={starsMin} onValueChange={setStarsMin}><SelectTrigger className="h-8 text-sm w-20"><SelectValue placeholder="Stars" /></SelectTrigger><SelectContent><SelectItem value="0">Any</SelectItem><SelectItem value="1">1★+</SelectItem><SelectItem value="2">2★+</SelectItem><SelectItem value="3">3★+</SelectItem><SelectItem value="4">4★+</SelectItem><SelectItem value="5">5★</SelectItem></SelectContent></Select>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">₹{priceRange[0]} - ₹{priceRange[1]}</Label>
+                  <Slider min={0} max={100000} step={500} value={priceRange} onValueChange={setPriceRange} className="w-32" />
                 </div>
-                <div>
-                  <Select value={searchType} onValueChange={setSearchType}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Types</SelectItem>
-                      <SelectItem value="Flat">Flat</SelectItem>
-                      <SelectItem value="PG">PG</SelectItem>
-                      <SelectItem value="Hostel">Hostel</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">Dist: {typeof maxDistanceKm === 'number' ? `${maxDistanceKm}km` : 'Any'}</Label>
+                  <Slider min={1} max={25} step={0.5} value={[typeof maxDistanceKm === 'number' ? maxDistanceKm : 10]} onValueChange={(v) => setMaxDistanceKm(v?.[0])} className="w-24" />
                 </div>
-                <div>
-                  <Input placeholder="City" value={searchCity} onChange={(e) => setSearchCity(e.target.value)} />
-                </div>
-                <div className="hidden md:block">
-                  <Select value={minRating} onValueChange={setMinRating}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Min Rating" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">Any rating</SelectItem>
-                      <SelectItem value="3">3.0+</SelectItem>
-                      <SelectItem value="4">4.0+</SelectItem>
-                      <SelectItem value="4.5">4.5+</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="hidden md:block">
-                  <Select value={starsMin} onValueChange={setStarsMin}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Min Stars" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">Any stars</SelectItem>
-                      <SelectItem value="1">1★+</SelectItem>
-                      <SelectItem value="2">2★+</SelectItem>
-                      <SelectItem value="3">3★+</SelectItem>
-                      <SelectItem value="4">4★+</SelectItem>
-                      <SelectItem value="5">5★</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sort" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="rating_desc">Top rated</SelectItem>
-                      <SelectItem value="price_asc">Price: Low to High</SelectItem>
-                      <SelectItem value="price_desc">Price: High to Low</SelectItem>
-                      <SelectItem value="distance_asc">Distance: Closest</SelectItem>
-                      <SelectItem value="newest">Newest</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Price Range Row */}
-              <div className="max-w-7xl mx-auto px-2 mt-3">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <Label className="text-xs text-muted-foreground mb-2 block">Monthly price range (₹{priceRange[0]} - ₹{priceRange[1]})</Label>
-                    <div className="px-2">
-                      <Slider min={0} max={100000} step={500} value={priceRange} onValueChange={setPriceRange} />
+                {/* Amenities Popover */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 text-xs">Amenities</Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64">
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["wifi","ac","geyser","elevator","parking"] as const).map((key) => (
+                        <label key={key} className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
+                          <Checkbox checked={amenities[key]} onCheckedChange={(v) => setAmenities((prev) => ({ ...prev, [key]: Boolean(v) }))} />
+                          <span className="capitalize">{key}</span>
+                        </label>
+                      ))}
+                      <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
+                        <Checkbox checked={freeCancellation} onCheckedChange={(v) => setFreeCancellation(Boolean(v))} />
+                        <span>Free cancellation</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
+                        <Checkbox checked={payAtProperty} onCheckedChange={(v) => setPayAtProperty(Boolean(v))} />
+                        <span>Pay at property</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
+                        <Checkbox checked={breakfastIncluded} onCheckedChange={(v) => setBreakfastIncluded(Boolean(v))} />
+                        <span>Breakfast included</span>
+                      </label>
                     </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground mb-2 block">Max distance to centre {typeof maxDistanceKm === 'number' ? `(${maxDistanceKm} km)` : '(Any)'}</Label>
-                    <div className="px-2">
-                      <Slider min={1} max={25} step={0.5} value={[typeof maxDistanceKm === 'number' ? maxDistanceKm : 10]} onValueChange={(v) => setMaxDistanceKm(v?.[0])} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Amenities & Features Checkboxes */}
-              <div className="max-w-7xl mx-auto px-2 mt-3 pb-2">
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                  {(["wifi","ac","geyser","elevator","parking"] as const).map((key) => (
-                    <label key={key} className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
-                      <Checkbox checked={amenities[key]} onCheckedChange={(v) => setAmenities((prev) => ({ ...prev, [key]: Boolean(v) }))} />
-                      <span className="capitalize">{key}</span>
-                    </label>
-                  ))}
-                  <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
-                    <Checkbox checked={freeCancellation} onCheckedChange={(v) => setFreeCancellation(Boolean(v))} />
-                    <span>Free cancellation</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
-                    <Checkbox checked={payAtProperty} onCheckedChange={(v) => setPayAtProperty(Boolean(v))} />
-                    <span>Pay at property</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
-                    <Checkbox checked={breakfastIncluded} onCheckedChange={(v) => setBreakfastIncluded(Boolean(v))} />
-                    <span>Breakfast included</span>
-                  </label>
-                  <Button variant="outline" size="sm" onClick={() => { setSearchText(""); setSearchCity(""); setSearchType("All"); setPriceRange([0,50000]); setMinRating("0"); setStarsMin("0"); setFreeCancellation(false); setPayAtProperty(false); setBreakfastIncluded(false); setMaxDistanceKm(undefined); setSortBy("rating_desc"); setAmenities({wifi:false,elevator:false,geyser:false,ac:false,parking:false}); }}>
-                    Reset
-                  </Button>
-                  <SaveSearchDialog
-                    currentFilters={{
-                      city: searchCity,
-                      type: searchType,
-                      search: debouncedSearch,
-                      minPrice: priceRange[0],
-                      maxPrice: priceRange[1],
-                      minRating: Number(minRating),
-                      amenities: Object.entries(amenities).filter(([_, v]) => v).map(([k]) => k),
-                      starsMin: Number(starsMin),
-                      freeCancellation,
-                      payAtProperty,
-                      breakfastIncluded,
-                      maxDistanceKm,
-                      sort: sortBy,
-                    }}
-                  />
-                </div>
+                  </PopoverContent>
+                </Popover>
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setSearchText(""); setSearchCity(""); setSearchType("All"); setPriceRange([0,50000]); setMinRating("0"); setStarsMin("0"); setFreeCancellation(false); setPayAtProperty(false); setBreakfastIncluded(false); setMaxDistanceKm(undefined); setSortBy("rating_desc"); setAmenities({wifi:false,elevator:false,geyser:false,ac:false,parking:false}); }}>
+                  Reset
+                </Button>
+                <SaveSearchDialog
+                  currentFilters={{
+                    city: searchCity,
+                    type: searchType,
+                    search: debouncedSearch,
+                    minPrice: priceRange[0],
+                    maxPrice: priceRange[1],
+                    minRating: Number(minRating),
+                    amenities: Object.entries(amenities).filter(([_, v]) => v).map(([k]) => k),
+                    starsMin: Number(starsMin),
+                    freeCancellation,
+                    payAtProperty,
+                    breakfastIncluded,
+                    maxDistanceKm,
+                    sort: sortBy,
+                  }}
+                />
               </div>
             </div>
 
@@ -620,26 +561,21 @@ const TenantDashboard = () => {
             </div>
 
             {/* Recently Viewed Section */}
-            <div className="max-w-7xl mx-auto px-2 mb-6">
-              <RecentlyViewedSection />
-            </div>
 
             {/* Results */}
-            <div className="mb-6 grid gap-6 max-w-7xl mx-auto">
+            <div className="mb-6 max-w-7xl mx-auto">
               {loadingProperties ? (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {[1,2,3,4].map((i) => (
-                    <div key={i} className="flex bg-white rounded-xl shadow-md overflow-hidden">
-                      <div className="w-2/5">
-                        <Skeleton className="h-48 w-full" />
-                      </div>
-                      <div className="w-3/5 p-5 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {[1,2,3,4,5,6].map((i) => (
+                    <div key={i} className="bg-white rounded-xl shadow-md h-full">
+                      <Skeleton className="h-48 w-full rounded-t-xl" />
+                      <div className="p-4 space-y-3">
                         <Skeleton className="h-4 w-1/3" />
                         <Skeleton className="h-6 w-2/3" />
                         <Skeleton className="h-4 w-1/2" />
                         <div className="flex gap-2">
-                          <Skeleton className="h-8 w-24" />
-                          <Skeleton className="h-8 w-24" />
+                          <Skeleton className="h-9 w-24" />
+                          <Skeleton className="h-9 w-24" />
                         </div>
                       </div>
                     </div>
@@ -651,28 +587,24 @@ const TenantDashboard = () => {
                   <p>No properties found matching your criteria</p>
                 </div>
               ) : (
-                <div className="flex flex-col gap-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {filteredProperties.map((property: any) => {
                     const isFavorite = favorites.some((f: any) => f.property_id === property.property_id);
                     return (
-                    <div key={property.property_id} className="cursor-pointer">
-                      <div className="flex bg-white rounded-xl shadow-md overflow-hidden">
-                        <div className="w-full">
-                          <PropertyCard
-                            property={property}
-                            onView={() => { 
-                              setDetailsProperty(property); 
-                              setShowApplyForm(false);
-                              trackView.mutate(property.property_id);
-                            }}
-                            onApply={() => handleApplyForLease(property.property_id)}
-                            isFavorite={isFavorite}
-                            onToggleFavorite={handleToggleFavorite}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )})}
+                      <PropertyCard
+                        key={property.property_id}
+                        property={property}
+                        onView={() => { 
+                          setDetailsProperty(property); 
+                          setShowApplyForm(false);
+                          trackView.mutate(property.property_id);
+                        }}
+                        onApply={() => handleApplyForLease(property.property_id)}
+                        isFavorite={isFavorite}
+                        onToggleFavorite={handleToggleFavorite}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -682,8 +614,8 @@ const TenantDashboard = () => {
             <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0">
               {detailsProperty && (
                 <div className="w-full h-full overflow-y-auto">
-                  {/* Full-screen Image Carousel Section with Thumbnails */}
-                  <div className="relative p-6 bg-black/5">
+                  {/* Sticky Image Carousel Section with Thumbnails */}
+                  <div className="relative bg-black/5 pt-6 pb-2">
                     <ImageCarouselWithThumbnails 
                       images={detailsProperty.images && detailsProperty.images.length > 0 ? detailsProperty.images : ['/placeholder.jpg']}
                       alt={detailsProperty.address || "Property"}

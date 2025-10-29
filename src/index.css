@@ -168,4 +168,13 @@ All colors MUST be HSL.
     pointer-events: none;
   }
   .shine:hover::after { transform: translateX(150%); }
+
+  /* Hide scrollbar */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }

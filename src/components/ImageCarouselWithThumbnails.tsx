@@ -44,7 +44,7 @@ export function ImageCarouselWithThumbnails({ images, alt }: ImageCarouselWithTh
     if (thumbnailsRef.current) {
       const activeThumb = thumbnailsRef.current.querySelector(`[data-active="true"]`);
       if (activeThumb) {
-        (activeThumb as HTMLElement).scrollIntoView({ behavior: "smooth", inline: "center" });
+        (activeThumb as HTMLElement).scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       }
     }
   }, [currentIndex]);
