@@ -611,7 +611,7 @@ const TenantDashboard = () => {
           </TabsContent>
           {/* Property Details Modal */}
           <Dialog open={!!detailsProperty} onOpenChange={(open) => { if (!open) { setDetailsProperty(null); setShowApplyForm(false); } }}>
-            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0">
+            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 sm:p-0">
               {detailsProperty && (
                 <div className="w-full h-full overflow-y-auto">
                   {/* Sticky Image Carousel Section with Thumbnails */}
@@ -623,18 +623,18 @@ const TenantDashboard = () => {
                   </div>
 
                   {/* Scrollable Content Area */}
-                  <div className="max-w-7xl mx-auto px-6 py-6">
+                  <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
                       {/* Property Header */}
                       <div className="mb-6">
-                        <div className="flex items-start justify-between mb-2">
+                        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-2">
                           <div>
-                            <h1 className="text-3xl font-bold mb-2">{detailsProperty.address}</h1>
-                            <p className="text-muted-foreground">
+                            <h1 className="text-2xl sm:text-3xl font-bold mb-2">{detailsProperty.address}</h1>
+                            <p className="text-sm sm:text-base text-muted-foreground">
                               {detailsProperty.address}, {detailsProperty.city}, {detailsProperty.state}, {detailsProperty.zip_code}
                             </p>
                           </div>
                           <button
-                            className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-gray-50"
+                            className="px-3 sm:px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-gray-50 text-sm"
                             onClick={async () => {
                               try {
                                 const slug = detailsProperty.slug || detailsProperty.property_id;
@@ -662,13 +662,13 @@ const TenantDashboard = () => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-8">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Left Column - Details */}
-                        <div className="col-span-2 space-y-8">
+                        <div className="lg:col-span-2 space-y-8">
                           {/* Amenities */}
                           <div>
-                            <h2 className="text-2xl font-bold mb-4">Amenities</h2>
-                            <div className="grid grid-cols-3 gap-4">
+                            <h2 className="text-xl sm:text-2xl font-bold mb-4">Amenities</h2>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                               {detailsProperty.wifi_available && (
                                 <div className="flex items-center gap-3">
                                   <span className="text-2xl">📶</span>
@@ -705,23 +705,23 @@ const TenantDashboard = () => {
                           {/* About */}
                           {detailsProperty.custom_specs?.description && (
                             <div>
-                              <h2 className="text-2xl font-bold mb-4">About this OYO</h2>
-                              <p className="text-muted-foreground leading-relaxed">{detailsProperty.custom_specs.description}</p>
+                              <h2 className="text-xl sm:text-2xl font-bold mb-4">About this Property</h2>
+                              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{detailsProperty.custom_specs.description}</p>
                             </div>
                           )}
 
                           {/* Choose Your Room */}
                           <div>
-                            <h2 className="text-2xl font-bold mb-4">Choose your room</h2>
+                            <h2 className="text-xl sm:text-2xl font-bold mb-4">Choose your room</h2>
                             <div className="space-y-3">
                               {(detailsProperty.rooms || []).length === 0 && (
                                 <p className="text-muted-foreground">No rooms available at the moment.</p>
                               )}
                               {(detailsProperty.rooms || []).map((r: any) => (
-                                <div key={r.room_id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                                  <div className="flex items-start justify-between">
+                                <div key={r.room_id} className="border rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow">
+                                  <div className="flex flex-col sm:flex-row items-start sm:justify-between gap-3">
                                     <div className="flex-1">
-                                      <h3 className="font-bold text-lg mb-1">Room {r.room_number}</h3>
+                                      <h3 className="font-bold text-base sm:text-lg mb-1">Room {r.room_number}</h3>
                                       <div className="text-sm text-muted-foreground mb-2">
                                         {r.description || detailsProperty.property_type}
                                       </div>
@@ -731,12 +731,12 @@ const TenantDashboard = () => {
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="text-right">
-                                      <div className="text-2xl font-bold mb-1">₹{Number(r.rent_price || 0)}</div>
-                                      <div className="text-xs text-muted-foreground mb-3">per month</div>
+                                    <div className="text-left sm:text-right w-full sm:w-auto">
+                                      <div className="text-xl sm:text-2xl font-bold mb-1">₹{Number(r.rent_price || 0)}</div>
+                                      <div className="text-xs text-muted-foreground mb-2 sm:mb-3">per month</div>
                                       <Button
                                         size="sm"
-                                        className="bg-green-600 hover:bg-green-700"
+                                        className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
                                         onClick={() => {
                                           setSelectedRoomId(r.room_id);
                                           setMonthlyRent(String(r.rent_price || detailsProperty.price_per_room || ''));
@@ -755,16 +755,16 @@ const TenantDashboard = () => {
 
                           {/* Location & Nearby */}
                           <div>
-                            <h2 className="text-2xl font-bold mb-4">Location</h2>
-                            <div className="border rounded-lg p-4">
+                            <h2 className="text-xl sm:text-2xl font-bold mb-4">Location</h2>
+                            <div className="border rounded-lg p-3 sm:p-4">
                               <div className="flex items-start gap-3 mb-4">
                                 <span className="text-xl">📍</span>
                                 <div>
-                                  <p className="font-medium mb-1">{detailsProperty.address}</p>
-                                  <p className="text-sm text-muted-foreground">{detailsProperty.city}, {detailsProperty.state} {detailsProperty.zip_code}</p>
+                                  <p className="font-medium mb-1 text-sm sm:text-base">{detailsProperty.address}</p>
+                                  <p className="text-xs sm:text-sm text-muted-foreground">{detailsProperty.city}, {detailsProperty.state} {detailsProperty.zip_code}</p>
                                 </div>
                               </div>
-                              <div className="grid grid-cols-2 gap-4 mb-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <div>
                                   <h4 className="font-semibold text-sm mb-2 text-red-600">Places to visit</h4>
                                   <div className="space-y-2 text-sm">
@@ -805,8 +805,8 @@ const TenantDashboard = () => {
 
                           {/* House Rules */}
                           <div>
-                            <h2 className="text-2xl font-bold mb-4">House Rules</h2>
-                            <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+                            <h2 className="text-xl sm:text-2xl font-bold mb-4">House Rules</h2>
+                            <ul className="list-disc list-inside space-y-2 text-sm sm:text-base text-muted-foreground">
                               <li>Government ID required at check-in</li>
                               <li>No smoking in rooms</li>
                               <li>Pets not allowed</li>
@@ -817,7 +817,7 @@ const TenantDashboard = () => {
 
                           {/* Reviews */}
                           <div>
-                            <h2 className="text-2xl font-bold mb-4">Reviews</h2>
+                            <h2 className="text-xl sm:text-2xl font-bold mb-4">Reviews</h2>
                             {reviews.length === 0 ? (
                               <p className="text-muted-foreground">No reviews yet. Be the first to review.</p>
                             ) : (
@@ -869,18 +869,18 @@ const TenantDashboard = () => {
                         </div>
 
                         {/* Right Column - Booking Card (Sticky) */}
-                        <div className="col-span-1">
-                          <div className="sticky top-6 glass rounded-2xl p-6 shadow-lg">
+                        <div className="lg:col-span-1">
+                          <div className="lg:sticky lg:top-6 glass rounded-2xl p-4 sm:p-6 shadow-lg">
                             <div className="mb-4">
                               <div className="flex items-baseline gap-2 mb-1">
-                                <span className="text-3xl font-bold">{formatINR(detailsProperty.price_per_room || 0)}</span>
-                                <span className="text-sm text-muted-foreground">/ room / month</span>
+                                <span className="text-2xl sm:text-3xl font-bold">{formatINR(detailsProperty.price_per_room || 0)}</span>
+                                <span className="text-xs sm:text-sm text-muted-foreground">/ room / month</span>
                               </div>
                               <p className="text-xs text-muted-foreground">+ taxes & fees: {formatINR(Math.round((detailsProperty.price_per_room || 0) * 0.12))}</p>
                             </div>
 
                             {!showApplyForm ? (
-                              <Button className="w-full btn-gradient text-lg py-6" onClick={() => setShowApplyForm(true)}>
+                              <Button className="w-full btn-gradient text-base sm:text-lg py-5 sm:py-6" onClick={() => setShowApplyForm(true)}>
                                 Continue to Book
                               </Button>
                             ) : (
