@@ -51,7 +51,7 @@ const AdminDashboard = () => {
     },
   });
 
-  // Fetch disputes with full details (lease, tenant, owner, property)
+  // Fetch disputes with basic relations only (compatible with current schema)
   const { data: enhancedDisputes = [], isLoading: loadingEnhancedDisputes } = useQuery({
     queryKey: ["enhanced-disputes"],
     queryFn: async () => {
@@ -59,30 +59,9 @@ const AdminDashboard = () => {
         .from("disputes")
         .select(`
           *,
-          raised_by:users!disputes_raised_by_user_id_fkey(first_name, last_name, email, role),
-          transactions(
-            transaction_id,
-            amount,
-            payment_method,
-            leases(
-              lease_id,
-              lease_start,
-              lease_end,
-              rent,
-              tenant:users!leases_tenant_id_fkey(first_name, last_name, email),
-              properties(
-                property_id,
-                property_type,
-                address,
-                city,
-                state,
-                owner:users!properties_owner_id_fkey(first_name, last_name, email)
-              )
-            )
-          )
+          raised_by:users!disputes_raised_by_user_id_fkey(first_name, last_name, email, role)
         `)
         .order("created_at", { ascending: false });
-      
       if (error) throw error;
       return data;
     },
@@ -192,11 +171,11 @@ const AdminDashboard = () => {
                         <div className="flex justify-between items-start mb-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-lg">{property.property_type}</h3>
+                              <h3 className="font-semibold text-lg">{property.type}</h3>
                               <Badge variant="secondary">Pending</Badge>
                             </div>
                             <p className="text-sm text-muted-foreground mb-2">
-                              <strong>Address:</strong> {property.address}, {property.city}, {property.state} {property.zip_code}
+                              <strong>Address:</strong> {property.address_line_1}, {property.city}, {property.state} {property.zip_code}
                             </p>
                             <p className="text-sm text-muted-foreground">
                               <strong>Owner:</strong> {property.owner?.first_name} {property.owner?.last_name} ({property.owner?.email})
@@ -304,9 +283,9 @@ const AdminDashboard = () => {
                               {property && (
                                 <div>
                                   <p className="text-xs text-muted-foreground mb-1">Property</p>
-                                  <p className="text-sm font-medium">{property.property_type}</p>
+                                  <p className="text-sm font-medium">{property.type}</p>
                                   <p className="text-xs text-muted-foreground">
-                                    {property.address}, {property.city}, {property.state}
+                                    {property.address_line_1}, {property.city}, {property.state}
                                   </p>
                                 </div>
                               )}

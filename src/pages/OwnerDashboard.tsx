@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useQuery } from "@tanstack/react-query";
 
 const OwnerDashboard = () => {
   const { profile } = useAuth();
@@ -34,6 +35,9 @@ const OwnerDashboard = () => {
   const [propertyState, setPropertyState] = useState("");
   const [propertyZip, setPropertyZip] = useState("");
   const [propertyType, setPropertyType] = useState<"Flat" | "PG" | "Hostel">("Flat");
+  const [virtualTourUrl, setVirtualTourUrl] = useState("");
+  const [instantBooking, setInstantBooking] = useState(false);
+  const [featured, setFeatured] = useState(false);
   const [showPropertyDialog, setShowPropertyDialog] = useState(false);
   const [propertyImages, setPropertyImages] = useState<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -113,11 +117,11 @@ const OwnerDashboard = () => {
         .from("properties")
         .insert({
           owner_id: profile?.user_id,
-          address: propertyAddress,
+          address_line_1: propertyAddress,
           city: propertyCity,
           state: propertyState,
           zip_code: propertyZip,
-          property_type: propertyType,
+          type: propertyType,
           is_approved: false, // Requires admin approval
           images: imageUrls,
           price_per_room: pricePerRoom ? parseFloat(pricePerRoom) : null,
@@ -134,6 +138,9 @@ const OwnerDashboard = () => {
           },
           rating: 4.5,
           rating_count: 0,
+          virtual_tour_url: virtualTourUrl || null,
+          instant_booking: instantBooking,
+          featured: featured,
         } as any);
 
       if (error) throw error;
@@ -158,6 +165,9 @@ const OwnerDashboard = () => {
       setAc(false);
       setParking(false);
       setPropertyDescription("");
+  setVirtualTourUrl("");
+  setInstantBooking(false);
+  setFeatured(false);
       if (imageInputRef.current) imageInputRef.current.value = "";
       setShowPropertyDialog(false);
       refetchProperties();
@@ -227,7 +237,7 @@ const OwnerDashboard = () => {
           property_id: selectedPropertyForRoom,
           room_number: roomNumber,
           rent_price: parseFloat(roomRent),
-          is_occupied: false,
+          status: 'Available',
         } as any);
 
       if (error) throw error;
@@ -270,8 +280,8 @@ const OwnerDashboard = () => {
         .from("beds")
         .insert({
           room_id: selectedRoomForBed,
-          bed_number: bedNumber,
-          is_occupied: false,
+          bed_name: bedNumber,
+          status: 'Available',
         } as any);
 
       if (error) throw error;
@@ -328,7 +338,7 @@ const OwnerDashboard = () => {
     try {
       const { error } = await (supabase as any)
         .from("leases")
-        .update({ status: 'Terminated' })
+        .update({ status: 'Cancelled' })
         .eq("lease_id", leaseId);
 
       if (error) throw error;
@@ -390,11 +400,12 @@ const OwnerDashboard = () => {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="properties">Properties</TabsTrigger>
             <TabsTrigger value="leases">Lease Applications</TabsTrigger>
             <TabsTrigger value="tenants">Active Tenants</TabsTrigger>
+            <TabsTrigger value="qna">Q&A</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -591,6 +602,37 @@ const OwnerDashboard = () => {
                         </div>
                       </div>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="virtualTour">Virtual Tour URL</Label>
+                      <Input
+                        id="virtualTour"
+                        placeholder="https://... (YouTube, Vimeo, Matterport)"
+                        value={virtualTourUrl}
+                        onChange={(e) => setVirtualTourUrl(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="instantBooking"
+                          checked={instantBooking}
+                          onChange={(e) => setInstantBooking(e.target.checked)}
+                          className="rounded"
+                        />
+                        <label htmlFor="instantBooking" className="text-sm">Enable Instant Booking</label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="featured"
+                          checked={featured}
+                          onChange={(e) => setFeatured(e.target.checked)}
+                          className="rounded"
+                        />
+                        <label htmlFor="featured" className="text-sm">Mark as Featured</label>
+                      </div>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="images">Property Images</Label>
@@ -712,7 +754,7 @@ const OwnerDashboard = () => {
                               <SelectContent>
                                 {ownerProperties.map((property: any) => (
                                   <SelectItem key={property.property_id} value={property.property_id}>
-                                    {property.address}, {property.city}
+                                    {property.address_line_1}, {property.city}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -771,7 +813,7 @@ const OwnerDashboard = () => {
                               <SelectContent>
                                 {ownerProperties.map((property: any) => (
                                   <SelectItem key={property.property_id} value={property.property_id}>
-                                    {property.address}, {property.city}
+                                    {property.address_line_1}, {property.city}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -897,7 +939,7 @@ const OwnerDashboard = () => {
                             {detailsProperty && (
                               <>
                                 <DialogHeader>
-                                  <DialogTitle className="text-2xl">{detailsProperty.address}</DialogTitle>
+                                  <DialogTitle className="text-2xl">{detailsProperty.address_line_1}</DialogTitle>
                                   <DialogDescription>{detailsProperty.city}, {detailsProperty.state} {detailsProperty.zip_code}</DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-4">
@@ -927,7 +969,7 @@ const OwnerDashboard = () => {
                                       </div>
                                       <h3 className="font-bold text-xl mb-2">₹{detailsProperty.price_per_room || 0}<span className="text-sm font-normal text-muted-foreground">/room/month</span></h3>
                                       <div className="text-sm text-muted-foreground mb-4">
-                                        {detailsProperty.property_type} • {detailsProperty.zip_code}
+                                        {detailsProperty.type} • {detailsProperty.zip_code}
                                       </div>
                                       
                                       {/* Amenities */}
@@ -975,7 +1017,7 @@ const OwnerDashboard = () => {
                                           </div>
                                           <div className="flex justify-between">
                                             <span className="text-muted-foreground">Type:</span>
-                                            <span>{detailsProperty.property_type}</span>
+                                            <span>{detailsProperty.type}</span>
                                           </div>
                                           <div className="flex justify-between">
                                             <span className="text-muted-foreground">Added on:</span>
@@ -1029,6 +1071,19 @@ const OwnerDashboard = () => {
                 {loadingLeases ? (
                   <div className="text-center py-8 text-muted-foreground">
                     Loading applications...
+
+          {/* Q&A Management */}
+          <TabsContent value="qna" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Community Q&A for Your Properties</CardTitle>
+                <CardDescription>Answer questions tenants ask about your listings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <OwnerQnASection ownerId={profile?.user_id} />
+              </CardContent>
+            </Card>
+          </TabsContent>
                   </div>
                 ) : pendingLeases.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
@@ -1128,3 +1183,83 @@ const OwnerDashboard = () => {
 };
 
 export default OwnerDashboard;
+
+// Lightweight embedded component for owner Q&A management
+const OwnerQnASection = ({ ownerId }: { ownerId?: string }) => {
+  const { toast } = useToast();
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+
+  const { data: questions = [], refetch } = useQuery({
+    queryKey: ["owner-qna", ownerId],
+    enabled: !!ownerId,
+    queryFn: async () => {
+      if (!ownerId) return [] as any[];
+      // fetch owner's property IDs
+      const { data: props, error: pErr } = await supabase
+        .from("properties")
+        .select("property_id, address_line_1")
+        .eq("owner_id", ownerId);
+      if (pErr) throw pErr;
+      const ids = (props || []).map((p: any) => p.property_id);
+      if (!ids.length) return [] as any[];
+      const { data, error } = await supabase
+        .from("property_questions")
+        .select("question_id, property_id, question, created_at")
+        .in("property_id", ids)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const submitAnswer = async (q: any) => {
+    const text = answers[q.question_id]?.trim();
+    if (!text) return;
+    const { error } = await supabase
+      .from("property_answers")
+      .insert({
+        question_id: q.question_id,
+        user_id: ownerId,
+        answer: text,
+        is_owner: true,
+      } as any);
+    if (error) {
+      toast({ title: "Failed to post answer", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Answer posted" });
+      setAnswers((prev) => ({ ...prev, [q.question_id]: "" }));
+      refetch();
+    }
+  };
+
+  if (!ownerId) {
+    return <div className="text-sm text-muted-foreground">Sign in to manage Q&A.</div>;
+  }
+
+  if (!questions.length) {
+    return <div className="text-sm text-muted-foreground">No questions yet for your properties.</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {questions.map((q: any) => (
+        <Card key={q.question_id} className="border">
+          <CardContent className="pt-6 space-y-3">
+            <div className="text-sm">
+              <span className="font-medium">Question:</span> {q.question}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-start">
+              <Textarea
+                placeholder="Write your answer..."
+                value={answers[q.question_id] || ""}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [q.question_id]: e.target.value }))}
+                rows={3}
+              />
+              <Button className="whitespace-nowrap" onClick={() => submitAnswer(q)}>Post Answer</Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+};
