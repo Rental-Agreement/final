@@ -199,10 +199,10 @@ const Index = () => {
 
 
       {/* Public Property Catalog Section */}
-      <section className="container mx-auto px-4 py-16">
-        <h2 className="text-4xl font-extrabold mb-8 text-center gradient-text">Find Your Next Stay</h2>
+      <section className="container mx-auto px-4 py-8 sm:py-16">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold mb-6 sm:mb-8 text-center gradient-text">Find Your Next Stay</h2>
         {/* Quick Categories Bar (horizontal scroll) */}
-        <div className="flex gap-3 overflow-x-auto pb-3 mb-6 [-ms-overflow-style:none] [scrollbar-width:none]" style={{scrollbarWidth:'none' as any}}>
+        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-3 mb-4 sm:mb-6 scrollbar-hide">
           {[
             {label:"Trending", onClick:()=>setSort("rating_desc"), active: sort==="rating_desc"},
             {label:"Budget", onClick:()=>setSort("price_asc"), active: sort==="price_asc"},
@@ -234,14 +234,14 @@ const Index = () => {
           ))}
           {sort && <span className="px-3 py-1 rounded-full bg-primary/10 text-primary font-medium">Sort: {sort.replace('_',' ')} <button className="ml-2 text-xs" onClick={()=>setSort(undefined)}>×</button></span>}
         </div>
-        <div className="max-w-6xl mx-auto mb-8 flex flex-wrap gap-3 items-center">
+        <div className="max-w-6xl mx-auto mb-8 flex flex-wrap gap-2 items-center px-2">
           {/* Search Bar */}
           <Input 
             type="text" 
             placeholder="Search destinations..." 
             value={search} 
             onChange={e => setSearch(e.target.value)} 
-            className="flex-1 min-w-[200px]" 
+            className="flex-1 min-w-[150px] text-sm h-9" 
           />
           
           {/* City Input */}
@@ -250,14 +250,14 @@ const Index = () => {
             placeholder="City" 
             value={city} 
             onChange={e => setCity(e.target.value)} 
-            className="w-40" 
+            className="w-32 sm:w-40 text-sm h-9" 
           />
 
           {/* Property Type Popover */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                Property Type <ChevronDown className="w-4 h-4" />
+              <Button variant="outline" className="gap-2 h-9 text-sm">
+                Property Type <ChevronDown className="w-3 h-3" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-56">
@@ -271,7 +271,7 @@ const Index = () => {
                         checked={type === t}
                         onCheckedChange={() => setType(t)}
                       />
-                      <Label htmlFor={`type-${t}`} className="cursor-pointer">{t}</Label>
+                      <Label htmlFor={`type-${t}`} className="cursor-pointer text-sm">{t}</Label>
                     </div>
                   ))}
                 </div>
@@ -282,8 +282,8 @@ const Index = () => {
           {/* Amenities Popover */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                Amenities {amenities.length > 0 && `(${amenities.length})`} <ChevronDown className="w-4 h-4" />
+              <Button variant="outline" className="gap-2 h-9 text-sm">
+                Amenities {amenities.length > 0 && `(${amenities.length})`} <ChevronDown className="w-3 h-3" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-56">
@@ -303,7 +303,7 @@ const Index = () => {
                         checked={amenities.includes(key)}
                         onCheckedChange={() => toggleAmenity(key)}
                       />
-                      <Label htmlFor={`amenity-${key}`} className="cursor-pointer">{label}</Label>
+                      <Label htmlFor={`amenity-${key}`} className="cursor-pointer text-sm">{label}</Label>
                     </div>
                   ))}
                 </div>
@@ -314,8 +314,8 @@ const Index = () => {
           {/* Price Range Popover */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                Price Range <ChevronDown className="w-4 h-4" />
+              <Button variant="outline" className="gap-2 h-9 text-sm whitespace-nowrap">
+                Price Range <ChevronDown className="w-3 h-3" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64">
@@ -327,12 +327,14 @@ const Index = () => {
                     placeholder="Min" 
                     value={minPrice} 
                     onChange={e => setMinPrice(e.target.value)} 
+                    className="h-8 text-sm"
                   />
                   <Input 
                     type="number" 
                     placeholder="Max" 
                     value={maxPrice} 
                     onChange={e => setMaxPrice(e.target.value)} 
+                    className="h-8 text-sm"
                   />
                 </div>
               </div>
@@ -342,8 +344,8 @@ const Index = () => {
           {/* Rating Filter */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                Rating {minRating && `(${minRating}★+)`} <ChevronDown className="w-4 h-4" />
+              <Button variant="outline" className="gap-2 h-9 text-sm">
+                Rating {minRating && `(${minRating}★+)`} <ChevronDown className="w-3 h-3" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-48">
@@ -357,6 +359,7 @@ const Index = () => {
                   step="0.1"
                   value={minRating} 
                   onChange={e => setMinRating(e.target.value)} 
+                  className="h-8 text-sm"
                 />
               </div>
             </PopoverContent>
@@ -366,7 +369,7 @@ const Index = () => {
           <select 
             value={sort || ''} 
             onChange={e => setSort((e.target.value || undefined) as any)} 
-            className="border rounded px-3 py-2 bg-background hover:bg-accent transition-colors cursor-pointer"
+            className="border rounded px-3 py-1.5 bg-background hover:bg-accent transition-colors cursor-pointer text-sm h-9"
           >
             <option value="">Sort by</option>
             <option value="rating_desc">Top rated</option>
@@ -415,14 +418,14 @@ const Index = () => {
 
       {/* Property Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold gradient-text">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 sm:p-6">
+          <DialogHeader className="px-4 pt-4 sm:px-0 sm:pt-0">
+            <DialogTitle className="text-xl sm:text-2xl font-bold gradient-text">
               {selectedProperty?.address || "Property Details"}
             </DialogTitle>
           </DialogHeader>
           {selectedProperty && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6 px-4 pb-4 sm:px-0 sm:pb-0">
               {/* Image Carousel */}
               {selectedProperty.images && selectedProperty.images.length > 0 && (
                 <ImageCarouselWithThumbnails 
@@ -432,18 +435,18 @@ const Index = () => {
               )}
               
               {/* Property Info */}
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div>
-                  <h3 className="font-semibold text-lg mb-2">Location</h3>
-                  <p className="text-muted-foreground">{selectedProperty.city}, {selectedProperty.state}</p>
+                  <h3 className="font-semibold text-base sm:text-lg mb-2">Location</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground">{selectedProperty.city}, {selectedProperty.state}</p>
                   {selectedProperty.neighborhood && (
-                    <p className="text-sm text-muted-foreground mt-1">{selectedProperty.neighborhood}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1">{selectedProperty.neighborhood}</p>
                   )}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg mb-2">Price</h3>
-                  <p className="text-2xl font-bold text-primary">{formatINR(selectedProperty.price_per_room)}</p>
-                  <p className="text-sm text-muted-foreground">per room per month</p>
+                  <h3 className="font-semibold text-base sm:text-lg mb-2">Price</h3>
+                  <p className="text-xl sm:text-2xl font-bold text-primary">{formatINR(selectedProperty.price_per_room)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">per room per month</p>
                 </div>
               </div>
 
