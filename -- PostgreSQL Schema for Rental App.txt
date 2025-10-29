@@ -1,0 +1,145 @@
+-- PostgreSQL Schema for Rental Application Documentation
+-- Suggested for use with Supabase / PostgreSQL
+---------------------------------------------------
+
+-- 1. USERS Table (Tenant, Owner, Admin)
+-- Includes roles and a check for owner/property approval (Admin function)
+CREATE TABLE Users (
+    user_id SERIAL PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    phone_number VARCHAR(20) UNIQUE,
+    role VARCHAR(10) NOT NULL CHECK (role IN ('Admin', 'Owner', 'Tenant')),
+    password_hash TEXT NOT NULL,
+    is_approved BOOLEAN DEFAULT FALSE, -- For Owner approval by Admin [cite: 16]
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+---
+
+-- 2. PROPERTIES Table
+-- Links properties to a specific Owner
+CREATE TABLE Properties (
+    property_id SERIAL PRIMARY KEY,
+    owner_id INT NOT NULL REFERENCES Users(user_id), -- FK to Owner
+    address_line_1 VARCHAR(255) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    state VARCHAR(100) NOT NULL,
+    zip_code VARCHAR(20) NOT NULL,
+    type VARCHAR(50), -- e.g., 'Apartment', 'PG'
+    is_approved BOOLEAN DEFAULT FALSE, -- Admin approves properties [cite: 16]
+    status VARCHAR(10) NOT NULL DEFAULT 'Available' CHECK (status IN ('Available', 'Occupied')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+---
+
+-- 3. ROOMS Table
+-- Rooms are within properties
+CREATE TABLE Rooms (
+    room_id SERIAL PRIMARY KEY,
+    property_id INT NOT NULL REFERENCES Properties(property_id), -- FK to Property
+    room_number VARCHAR(50) NOT NULL,
+    rent_price NUMERIC(10, 2) NOT NULL,
+    description TEXT,
+    UNIQUE (property_id, room_number)
+);
+
+---
+
+-- 4. BEDS Table (Optional, for PG/Shared style rentals)
+-- Beds are within rooms
+CREATE TABLE Beds (
+    bed_id SERIAL PRIMARY KEY,
+    room_id INT NOT NULL REFERENCES Rooms(room_id), -- FK to Room
+    bed_name VARCHAR(50) NOT NULL, -- e.g., 'Bed A'
+    status VARCHAR(10) NOT NULL DEFAULT 'Available' CHECK (status IN ('Available', 'Occupied')),
+    UNIQUE (room_id, bed_name)
+);
+
+---
+
+-- 5. LEASES Table (Agreements)
+-- Links a Tenant to a specific room or bed
+CREATE TABLE Leases (
+    lease_id SERIAL PRIMARY KEY,
+    tenant_id INT NOT NULL REFERENCES Users(user_id), -- FK to Tenant
+    -- Note: To allow leasing of either a Room or a Bed, we use two columns
+    room_id INT REFERENCES Rooms(room_id),
+    bed_id INT REFERENCES Beds(bed_id),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    monthly_rent NUMERIC(10, 2) NOT NULL, -- Rent amount [cite: 30]
+    security_deposit NUMERIC(10, 2) NOT NULL, -- Security deposit [cite: 30]
+    billing_cycle VARCHAR(10) NOT NULL CHECK (billing_cycle IN ('Monthly', 'Weekly')), -- Billing cycle [cite: 30]
+    status VARCHAR(10) NOT NULL CHECK (status IN ('Pending', 'Active', 'Completed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    -- Constraint to ensure only one unit is selected (either room_id OR bed_id)
+    CONSTRAINT check_unit_type CHECK (
+        (room_id IS NOT NULL AND bed_id IS NULL) OR (room_id IS NULL AND bed_id IS NOT NULL)
+    )
+    -- A separate UNIQUE constraint on the unit ID/type is needed to enforce "Only one active lease per bed/room" [cite: 31]
+    -- This is often enforced via application logic or a more complex trigger/partial index in SQL.
+);
+
+---
+
+-- 6. PAYMENT_METHODS Table
+-- Stores Tenant payment details
+CREATE TABLE Payment_Methods (
+    method_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES Users(user_id), -- FK to Tenant/User
+    method_type VARCHAR(10) NOT NULL CHECK (method_type IN ('UPI', 'Card', 'Bank')), -- Payment types [cite: 33]
+    last_four_digits VARCHAR(4),
+    is_auto_pay BOOLEAN DEFAULT FALSE, -- Auto-pay option [cite: 35]
+    token TEXT -- Tokenized data for PCI DSS compliance [cite: 90]
+);
+
+---
+
+-- 7. TRANSACTIONS Table (Rent Payments)
+-- Records every payment made by a Tenant
+CREATE TABLE Transactions (
+    transaction_id SERIAL PRIMARY KEY,
+    lease_id INT NOT NULL REFERENCES Leases(lease_id), -- FK to Lease
+    amount NUMERIC(10, 2) NOT NULL,
+    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(10) NOT NULL CHECK (status IN ('Pending', 'Success', 'Failed')), -- Transaction status [cite: 36]
+    payment_gateway_ref VARCHAR(255) UNIQUE NOT NULL, -- Reference ID from payment gateway
+    payment_method_id INT REFERENCES Payment_Methods(method_id) -- FK to Payment Method
+);
+
+---
+
+-- 8. PAYOUTS Table (Owner Settlements)
+-- Tracks money released to the Owner [cite: 37]
+CREATE TABLE Payouts (
+    payout_id SERIAL PRIMARY KEY,
+    owner_id INT NOT NULL REFERENCES Users(user_id), -- FK to Owner
+    related_transaction_id INT REFERENCES Transactions(transaction_id), -- The Tenant payment that triggered the payout
+    gross_amount NUMERIC(10, 2) NOT NULL,
+    gateway_fee NUMERIC(10, 2) NOT NULL, -- Gateway fees deducted [cite: 39]
+    net_amount NUMERIC(10, 2) NOT NULL,
+    payout_date TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('Queued', 'Processing', 'Completed', 'Failed')), -- Payout status [cite: 40]
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Note: We can add an index to Transactions.owner_payout_id later to link Transactions to Payouts for reporting[cite: 53].
+
+---
+
+-- 9. DISPUTES Table
+-- Tracks disputes raised by Tenant/Owner and resolved by Admin [cite: 41, 43]
+CREATE TABLE Disputes (
+    dispute_id SERIAL PRIMARY KEY,
+    raised_by_user_id INT NOT NULL REFERENCES Users(user_id), -- FK to user who raised it (Tenant/Owner) [cite: 42]
+    related_transaction_id INT REFERENCES Transactions(transaction_id), -- The payment transaction in question (Nullable)
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('Open', 'In Review', 'Resolved', 'Rejected')), -- Dispute status [cite: 80]
+    resolved_by_admin_id INT REFERENCES Users(user_id), -- FK to Admin who resolved it (if resolved)
+    resolution_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
