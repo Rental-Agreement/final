@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, DollarSign, Users, PlusCircle, Home, Bed, Calendar, CheckCircle, XCircle } from "lucide-react";
+import { Building2, DollarSign, Users, PlusCircle, Home, Bed, Calendar, CheckCircle, XCircle, Eye, Pencil, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useOwnerProperties } from "@/hooks/use-properties";
 import { useOwnerLeases } from "@/hooks/use-leases";
@@ -55,6 +55,12 @@ const OwnerDashboard = () => {
   const [ac, setAc] = useState(false);
   const [parking, setParking] = useState(false);
   const [propertyDescription, setPropertyDescription] = useState("");
+  // Rooms/beds configuration for new property
+  const [numberOfRooms, setNumberOfRooms] = useState("1");
+  const [bedsPerRoom, setBedsPerRoom] = useState("1");
+  // Edit dialog state
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<any | null>(null);
   
   // Room form state
   const [selectedPropertyForRoom, setSelectedPropertyForRoom] = useState("");
@@ -86,6 +92,21 @@ const OwnerDashboard = () => {
   const activeTenants = activeLeases.length;
   const monthlyIncome = activeLeases.reduce((sum: number, lease: any) => sum + (lease.monthly_rent || 0), 0);
 
+  // Helper: sanitize filenames into a safe storage key (no spaces, emojis, or quotes)
+  const makeSafeObjectPath = (file: File, prefix = "property-images") => {
+    const original = file.name || `image-${Date.now()}`;
+    const dot = original.lastIndexOf(".");
+    const ext = dot > -1 ? original.slice(dot + 1).toLowerCase() : "jpg";
+    const base = dot > -1 ? original.slice(0, dot) : original;
+    const safeBase = base
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "image";
+    const safeName = `${safeBase}-${Date.now()}.${ext}`;
+    return `${prefix}/${safeName}`;
+  };
+
   // Handle add property
   const handleAddProperty = async () => {
     if (!propertyAddress || !propertyCity || !propertyState || !propertyZip) {
@@ -97,31 +118,36 @@ const OwnerDashboard = () => {
       return;
     }
 
+    // Upload images to Supabase Storage
     let imageUrls: string[] = [];
-    if (imageInputRef.current && imageInputRef.current.files && imageInputRef.current.files.length > 0) {
+    if (imageInputRef.current?.files && imageInputRef.current.files.length > 0) {
       const files = Array.from(imageInputRef.current.files);
       for (const file of files) {
-        const filePath = `property-images/${Date.now()}_${file.name}`;
-  const { data, error } = await supabase.storage.from("property-image").upload(filePath, file);
-        if (error) {
-          toast({ title: "Image Upload Failed", description: error.message, variant: "destructive" });
-        } else {
-  const { publicUrl } = supabase.storage.from("property-image").getPublicUrl(filePath).data;
-    imageUrls.push(publicUrl);
+        const filePath = makeSafeObjectPath(file);
+        const { error: uploadError } = await supabase.storage
+          .from("property-image")
+          .upload(filePath, file, { upsert: false, contentType: file.type || undefined, cacheControl: "3600" });
+        if (uploadError) {
+          toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
+          continue;
         }
+        const { publicUrl } = supabase.storage.from("property-image").getPublicUrl(filePath).data;
+        imageUrls.push(publicUrl);
       }
     }
 
     try {
-      const { error } = await supabase
+      const { data: propertyData, error } = await supabase
         .from("properties")
         .insert({
           owner_id: profile?.user_id,
           address_line_1: propertyAddress,
+          address: propertyAddress, // Also set address for compatibility
           city: propertyCity,
           state: propertyState,
           zip_code: propertyZip,
           type: propertyType,
+          property_type: propertyType, // Also set property_type for compatibility
           is_approved: false, // Requires admin approval
           images: imageUrls,
           price_per_room: pricePerRoom ? parseFloat(pricePerRoom) : null,
@@ -141,13 +167,48 @@ const OwnerDashboard = () => {
           virtual_tour_url: virtualTourUrl || null,
           instant_booking: instantBooking,
           featured: featured,
-        } as any);
+        } as any)
+        .select()
+        .single();
 
-      if (error) throw error;
+  if (error) throw error;
+  if (!propertyData) throw new Error("Property insert returned no data");
+  const propertyId = (propertyData as any).property_id;
+
+      // Auto-create rooms and beds
+      const numRooms = parseInt(numberOfRooms) || 1;
+      const numBedsPerRoom = parseInt(bedsPerRoom) || 1;
+      const rentPerRoom = pricePerRoom ? parseFloat(pricePerRoom) : 0;
+      for (let i = 1; i <= numRooms; i++) {
+        const { data: room, error: roomError } = await (supabase as any)
+          .from("rooms")
+          .insert({
+            property_id: propertyId,
+            room_number: i.toString(),
+            rent_price: rentPerRoom,
+            is_occupied: false,
+          })
+          .select()
+          .single();
+        if (roomError || !room) {
+          console.error("Room creation failed", roomError);
+          continue;
+        }
+        for (let j = 1; j <= numBedsPerRoom; j++) {
+          const { error: bedError } = await (supabase as any)
+            .from("beds")
+            .insert({
+              room_id: room.room_id,
+              bed_number: j.toString(),
+              is_occupied: false,
+            });
+          if (bedError) console.error("Bed creation failed", bedError);
+        }
+      }
 
       toast({
         title: "Property Added! 🏠",
-        description: "Your property has been submitted for admin approval.",
+        description: `Your property with ${numRooms} room(s) and ${numBedsPerRoom} bed(s) per room has been submitted for admin approval.`,
       });
 
       // Reset form
@@ -158,6 +219,8 @@ const OwnerDashboard = () => {
       setPropertyType("Flat");
       setPropertyImages([]);
       setPricePerRoom("");
+      setNumberOfRooms("1");
+      setBedsPerRoom("1");
       setWifiAvailable(false);
       setTimings("");
       setElevator(false);
@@ -165,9 +228,9 @@ const OwnerDashboard = () => {
       setAc(false);
       setParking(false);
       setPropertyDescription("");
-  setVirtualTourUrl("");
-  setInstantBooking(false);
-  setFeatured(false);
+      setVirtualTourUrl("");
+      setInstantBooking(false);
+      setFeatured(false);
       if (imageInputRef.current) imageInputRef.current.value = "";
       setShowPropertyDialog(false);
       refetchProperties();
@@ -180,10 +243,103 @@ const OwnerDashboard = () => {
     }
   };
 
+  // Open Edit dialog and prefill fields
+  const handleOpenEditDialog = (property: any) => {
+    setEditingProperty(property);
+    setPropertyAddress(property.address_line_1 || "");
+    setPropertyCity(property.city || "");
+    setPropertyState(property.state || "");
+    setPropertyZip(property.zip_code || "");
+    setPropertyType(property.type || "Flat");
+    setPricePerRoom(property.price_per_room?.toString() || "");
+    setWifiAvailable(!!property.wifi_available);
+    setTimings(property.timings || "");
+    setElevator(!!property.amenities?.elevator);
+    setGeyser(!!property.amenities?.geyser);
+    setAc(!!property.amenities?.ac);
+    setParking(!!property.amenities?.parking);
+    setPropertyDescription(property.custom_specs?.description || "");
+    setVirtualTourUrl(property.virtual_tour_url || "");
+    setInstantBooking(!!property.instant_booking);
+    setFeatured(!!property.featured);
+    // Set existing images
+    setPropertyImages(property.images || []);
+    setShowEditDialog(true);
+  };
+
+  // Remove an image from the property
+  const handleRemoveImage = (index: number) => {
+    setPropertyImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Save edits and require re-approval
+  const handleSaveEditedProperty = async () => {
+    if (!editingProperty || !propertyAddress || !propertyCity || !propertyState || !propertyZip) {
+      toast({ title: "Validation Error", description: "Please fill in all property details", variant: "destructive" });
+      return;
+    }
+    
+    try {
+      // Upload new images if any
+      let newImageUrls: string[] = [];
+      if (imageInputRef.current?.files && imageInputRef.current.files.length > 0) {
+        const files = Array.from(imageInputRef.current.files);
+        for (const file of files) {
+          const filePath = makeSafeObjectPath(file);
+          const { error: uploadError } = await supabase.storage
+            .from("property-image")
+            .upload(filePath, file, { upsert: false, contentType: file.type || undefined, cacheControl: "3600" });
+          if (uploadError) {
+            toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
+            continue;
+          }
+          const { publicUrl } = supabase.storage.from("property-image").getPublicUrl(filePath).data;
+          newImageUrls.push(publicUrl);
+        }
+      }
+      
+      // Combine existing images with new ones
+      const allImages = [...propertyImages, ...newImageUrls];
+      
+      const updateData: any = {
+        address_line_1: propertyAddress,
+        city: propertyCity,
+        state: propertyState,
+        zip_code: propertyZip,
+        type: propertyType,
+        is_approved: false,
+        price_per_room: pricePerRoom ? parseFloat(pricePerRoom) : null,
+        wifi_available: wifiAvailable,
+        timings: timings || null,
+        amenities: { elevator, geyser, ac, parking },
+        custom_specs: { description: propertyDescription },
+        virtual_tour_url: virtualTourUrl || null,
+        instant_booking: instantBooking,
+        featured: featured,
+        images: allImages,
+      };
+      const { error } = await (supabase as any)
+        .from("properties")
+        .update(updateData)
+        .eq("property_id", editingProperty.property_id);
+      if (error) throw error;
+
+      toast({ title: "Property Updated", description: "Changes submitted for admin re-approval." });
+      // reset
+      setEditingProperty(null);
+      setPropertyImages([]);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      setShowEditDialog(false);
+      await refetchProperties();
+    } catch (err: any) {
+      toast({ title: "Failed to Update Property", description: err.message, variant: "destructive" });
+    }
+  };
+
   // Handle append images to existing property
   const handleAppendImages = async () => {
     if (!selectedPropertyForImages) return;
-    if (!appendImagesInputRef.current || !appendImagesInputRef.current.files || appendImagesInputRef.current.files.length === 0) {
+    if (!appendImagesInputRef.current?.files || appendImagesInputRef.current.files.length === 0) {
       toast({ title: "No files selected", description: "Please choose one or more images to upload.", variant: "destructive" });
       return;
     }
@@ -437,233 +593,26 @@ const OwnerDashboard = () => {
                 </CardContent>
               </Card>
 
-              <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
-                <DialogTrigger asChild>
-                  <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                    <CardHeader>
-                      <div className="flex items-center gap-2">
-                        <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-                          <PlusCircle className="w-5 h-5 text-success" />
-                        </div>
-                        <div>
-                          <CardTitle>Add Property</CardTitle>
-                          <CardDescription>List a new property</CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm mb-4">Expand your rental business</p>
-                      <Button className="w-full">Add New Property</Button>
-                    </CardContent>
-                  </Card>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Add New Property</DialogTitle>
-                    <DialogDescription>
-                      Enter property details. Admin approval required.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="address">Address</Label>
-                      <Input
-                        id="address"
-                        placeholder="123 Main Street"
-                        value={propertyAddress}
-                        onChange={(e) => setPropertyAddress(e.target.value)}
-                      />
+              <Card 
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => setShowPropertyDialog(true)}
+              >
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                      <PlusCircle className="w-5 h-5 text-success" />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
-                        <Input
-                          id="city"
-                          placeholder="New York"
-                          value={propertyCity}
-                          onChange={(e) => setPropertyCity(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="state">State</Label>
-                        <Input
-                          id="state"
-                          placeholder="NY"
-                          value={propertyState}
-                          onChange={(e) => setPropertyState(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="zip">ZIP Code</Label>
-                      <Input
-                        id="zip"
-                        placeholder="10001"
-                        value={propertyZip}
-                        onChange={(e) => setPropertyZip(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="type">Property Type</Label>
-                        <Select value={propertyType} onValueChange={(value: any) => setPropertyType(value)}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Flat">Flat</SelectItem>
-                            <SelectItem value="PG">PG (Paying Guest)</SelectItem>
-                            <SelectItem value="Hostel">Hostel</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="price">Price per Room (₹)</Label>
-                        <Input
-                          id="price"
-                          type="number"
-                          placeholder="5000"
-                          value={pricePerRoom}
-                          onChange={(e) => setPricePerRoom(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Property Description</Label>
-                      <Textarea
-                        id="description"
-                        placeholder="Describe your property..."
-                        value={propertyDescription}
-                        onChange={(e) => setPropertyDescription(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="timings">Check-in/Check-out Timings</Label>
-                      <Input
-                        id="timings"
-                        placeholder="e.g., Check-in: 2 PM, Check-out: 11 AM"
-                        value={timings}
-                        onChange={(e) => setTimings(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Amenities</Label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="wifi"
-                            checked={wifiAvailable}
-                            onChange={(e) => setWifiAvailable(e.target.checked)}
-                            className="rounded"
-                          />
-                          <label htmlFor="wifi" className="text-sm">WiFi Available</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="elevator"
-                            checked={elevator}
-                            onChange={(e) => setElevator(e.target.checked)}
-                            className="rounded"
-                          />
-                          <label htmlFor="elevator" className="text-sm">Elevator</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="geyser"
-                            checked={geyser}
-                            onChange={(e) => setGeyser(e.target.checked)}
-                            className="rounded"
-                          />
-                          <label htmlFor="geyser" className="text-sm">Geyser</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="ac"
-                            checked={ac}
-                            onChange={(e) => setAc(e.target.checked)}
-                            className="rounded"
-                          />
-                          <label htmlFor="ac" className="text-sm">AC</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="parking"
-                            checked={parking}
-                            onChange={(e) => setParking(e.target.checked)}
-                            className="rounded"
-                          />
-                          <label htmlFor="parking" className="text-sm">Parking</label>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="virtualTour">Virtual Tour URL</Label>
-                      <Input
-                        id="virtualTour"
-                        placeholder="https://... (YouTube, Vimeo, Matterport)"
-                        value={virtualTourUrl}
-                        onChange={(e) => setVirtualTourUrl(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="instantBooking"
-                          checked={instantBooking}
-                          onChange={(e) => setInstantBooking(e.target.checked)}
-                          className="rounded"
-                        />
-                        <label htmlFor="instantBooking" className="text-sm">Enable Instant Booking</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="featured"
-                          checked={featured}
-                          onChange={(e) => setFeatured(e.target.checked)}
-                          className="rounded"
-                        />
-                        <label htmlFor="featured" className="text-sm">Mark as Featured</label>
-                      </div>
+                    <div>
+                      <CardTitle>Add Property</CardTitle>
+                      <CardDescription>List a new property</CardDescription>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="images">Property Images</Label>
-                    <Input
-                      id="images"
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      ref={imageInputRef}
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        const urls = files.map((f) => URL.createObjectURL(f));
-                        setPropertyImages(urls);
-                      }}
-                    />
-                    <div className="flex gap-2 flex-wrap mt-2">
-                      {propertyImages.map((img, idx) => (
-                        <img key={idx} src={img} alt="Property" className="h-16 w-16 object-cover rounded" />
-                      ))}
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowPropertyDialog(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleAddProperty}>
-                      Add Property
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm mb-4">Expand your rental business</p>
+                  <Button className="w-full">Add New Property</Button>
+                </CardContent>
+              </Card>
 
               <Card className="hover:shadow-lg transition-shadow">
                 <CardHeader>
@@ -732,131 +681,6 @@ const OwnerDashboard = () => {
                     <CardDescription>Manage your property listings</CardDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Dialog open={showRoomDialog} onOpenChange={(open) => { setShowRoomDialog(open); if (!open) { setSelectedPropertyForRoom(""); setRoomNumber(""); setRoomRent(""); } }}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Home className="w-4 h-4 mr-2" />
-                          Add Room
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add Room</DialogTitle>
-                          <DialogDescription>Add a room to one of your properties</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="selectProperty">Select Property</Label>
-                            <Select value={selectedPropertyForRoom} onValueChange={setSelectedPropertyForRoom}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Choose a property..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {ownerProperties.map((property: any) => (
-                                  <SelectItem key={property.property_id} value={property.property_id}>
-                                    {property.address_line_1}, {property.city}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="roomNumber">Room Number</Label>
-                            <Input
-                              id="roomNumber"
-                              placeholder="e.g., 101"
-                              value={roomNumber}
-                              onChange={(e) => setRoomNumber(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="rentPrice">Monthly Rent ($)</Label>
-                            <Input
-                              id="rentPrice"
-                              type="number"
-                              placeholder="1200"
-                              value={roomRent}
-                              onChange={(e) => setRoomRent(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setShowRoomDialog(false)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={handleAddRoom}>
-                            Add Room
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-
-                    <Dialog open={showBedDialog} onOpenChange={(open) => { setShowBedDialog(open); if (!open) { setSelectedPropertyForBed(""); setSelectedRoomForBed(""); setBedNumber(""); } }}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Bed className="w-4 h-4 mr-2" />
-                          Add Bed
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add Bed</DialogTitle>
-                          <DialogDescription>Add a bed to a room (for PG/Hostel)</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="selectBedProperty">Select Property</Label>
-                            <Select value={selectedPropertyForBed} onValueChange={(val) => { setSelectedPropertyForBed(val); setSelectedRoomForBed(""); }}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Choose a property..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {ownerProperties.map((property: any) => (
-                                  <SelectItem key={property.property_id} value={property.property_id}>
-                                    {property.address_line_1}, {property.city}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="selectRoom">Select Room</Label>
-                            <Select value={selectedRoomForBed} onValueChange={setSelectedRoomForBed}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Choose a room..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(
-                                  (ownerProperties.find((p: any) => p.property_id === selectedPropertyForBed)?.rooms as any[]) || []
-                                ).map((room: any) => (
-                                  <SelectItem key={room.room_id} value={room.room_id}>
-                                    Room {room.room_number} - ${room.rent_price}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="bedNumber">Bed Number</Label>
-                            <Input
-                              id="bedNumber"
-                              placeholder="e.g., Bed 1"
-                              value={bedNumber}
-                              onChange={(e) => setBedNumber(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setShowBedDialog(false)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={handleAddBed}>
-                            Add Bed
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-
                     <Button size="sm" onClick={() => setShowPropertyDialog(true)}>
                       <PlusCircle className="w-4 h-4 mr-2" />
                       Add Property
@@ -884,25 +708,22 @@ const OwnerDashboard = () => {
                         <h3 className="font-semibold text-sm text-muted-foreground">
                           Pending Approval ({pendingProperties.length})
                         </h3>
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
                           {pendingProperties.map((property: any) => (
-                            <div key={property.property_id} className="relative">
-                              <PropertyCard property={property} />
-                              <Badge className="absolute top-2 right-2" variant="secondary">
-                                Pending
-                              </Badge>
-                              <div className="flex gap-2 mt-2">
-                                <Button
-                                  className="flex-1"
-                                  variant="secondary"
-                                  onClick={() => { setSelectedPropertyForImages(property); setShowImagesDialog(true); }}
-                                >
-                                  Add Photos
-                                </Button>
-                                <Button className="flex-1" variant="outline" onClick={() => setDetailsProperty(property)}>
-                                  View Details
-                                </Button>
-                              </div>
+                            <div key={property.property_id} className="relative flex flex-col h-full">
+                              <PropertyCard 
+                                property={property}
+                                showActions
+                                onView={() => setDetailsProperty(property)}
+                                onApply={() => handleOpenEditDialog(property)}
+                                viewLabel="View Details"
+                                applyLabel="Edit Details"
+                                statusBadgeText="Pending"
+                                viewIcon={<Eye className="w-4 h-4 mr-2" />}
+                                applyIcon={<Pencil className="w-4 h-4 mr-2" />}
+                                disableHoverScale
+                                cardClassName="min-h-[460px]"
+                              />
                             </div>
                           ))}
                         </div>
@@ -914,124 +735,25 @@ const OwnerDashboard = () => {
                         <h3 className="font-semibold text-sm text-muted-foreground">
                           Approved ({approvedProperties.length})
                         </h3>
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
                           {approvedProperties.map((property: any) => (
-                            <div key={property.property_id}>
-                              <PropertyCard property={property} />
-                              <div className="flex gap-2 mt-2">
-                                <Button className="flex-1" variant="outline" onClick={() => setDetailsProperty(property)}>
-                                  View Details
-                                </Button>
-                                <Button
-                                  className="flex-1"
-                                  variant="secondary"
-                                  onClick={() => { setSelectedPropertyForImages(property); setShowImagesDialog(true); }}
-                                >
-                                  Add Photos
-                                </Button>
-                              </div>
+                            <div key={property.property_id} className="flex flex-col h-full">
+                              <PropertyCard 
+                                property={property}
+                                showActions
+                                onView={() => setDetailsProperty(property)}
+                                onApply={() => handleOpenEditDialog(property)}
+                                viewLabel="View Details"
+                                applyLabel="Edit Details"
+                                statusBadgeText="Approved"
+                                viewIcon={<Eye className="w-4 h-4 mr-2" />}
+                                applyIcon={<Pencil className="w-4 h-4 mr-2" />}
+                                disableHoverScale
+                                cardClassName="min-h-[460px]"
+                              />
                             </div>
                           ))}
                         </div>
-                        {/* Property Details Modal */}
-                        <Dialog open={!!detailsProperty} onOpenChange={(open) => { if (!open) setDetailsProperty(null); }}>
-                          <DialogContent className="max-w-3xl">
-                            {detailsProperty && (
-                              <>
-                                <DialogHeader>
-                                  <DialogTitle className="text-2xl">{detailsProperty.address_line_1}</DialogTitle>
-                                  <DialogDescription>{detailsProperty.city}, {detailsProperty.state} {detailsProperty.zip_code}</DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  {/* Image Gallery */}
-                                  <div className="w-full bg-gray-100 rounded-lg p-2">
-                                    {detailsProperty.images && detailsProperty.images.length > 0 ? (
-                                      <div className="grid grid-cols-4 gap-2">
-                                        <div className="col-span-3 row-span-2">
-                                          <img src={detailsProperty.images[0]} alt="Main" className="w-full h-64 object-cover rounded" />
-                                        </div>
-                                        {detailsProperty.images.slice(1, 5).map((img: string, idx: number) => (
-                                          <img key={idx} src={img} alt={`Property ${idx + 2}`} className="w-full h-32 object-cover rounded" />
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <div className="w-full h-64 bg-gray-200 flex items-center justify-center text-gray-400">No Images</div>
-                                    )}
-                                  </div>
-                                  
-                                  {/* Property Info */}
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <span className="bg-black text-white text-xs px-2 py-1 rounded">Company-Serviced</span>
-                                        <span className="bg-green-500 text-white text-xs px-2 py-1 rounded">{detailsProperty.rating || 4.5} ★</span>
-                                        <span className="text-xs text-muted-foreground">({detailsProperty.rating_count || 0} Ratings)</span>
-                                      </div>
-                                      <h3 className="font-bold text-xl mb-2">₹{detailsProperty.price_per_room || 0}<span className="text-sm font-normal text-muted-foreground">/room/month</span></h3>
-                                      <div className="text-sm text-muted-foreground mb-4">
-                                        {detailsProperty.type} • {detailsProperty.zip_code}
-                                      </div>
-                                      
-                                      {/* Amenities */}
-                                      <div className="mb-4">
-                                        <h4 className="font-semibold mb-2">Amenities</h4>
-                                        <div className="flex flex-wrap gap-2">
-                                          {detailsProperty.wifi_available && <span className="flex items-center gap-1 text-xs bg-blue-100 px-2 py-1 rounded">WiFi</span>}
-                                          {detailsProperty.amenities && Object.keys(detailsProperty.amenities).map((am, idx) => (
-                                            detailsProperty.amenities[am] ? (
-                                              <span key={idx} className="flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded">
-                                                {am.charAt(0).toUpperCase() + am.slice(1)}
-                                              </span>
-                                            ) : null
-                                          ))}
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Timings */}
-                                      {detailsProperty.timings && (
-                                        <div className="mb-4">
-                                          <h4 className="font-semibold mb-1">Timings</h4>
-                                          <p className="text-sm text-muted-foreground">{detailsProperty.timings}</p>
-                                        </div>
-                                      )}
-                                    </div>
-                                    
-                                    <div>
-                                      {/* Description */}
-                                      {detailsProperty.custom_specs?.description && (
-                                        <div className="mb-4">
-                                          <h4 className="font-semibold mb-2">Description</h4>
-                                          <p className="text-sm text-muted-foreground">{detailsProperty.custom_specs.description}</p>
-                                        </div>
-                                      )}
-                                      
-                                      {/* Property Stats */}
-                                      <div className="border rounded-lg p-3">
-                                        <h4 className="font-semibold mb-2">Property Details</h4>
-                                        <div className="space-y-2 text-sm">
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Status:</span>
-                                            <span className={detailsProperty.is_approved ? "text-green-600" : "text-yellow-600"}>
-                                              {detailsProperty.is_approved ? "Approved" : "Pending Approval"}
-                                            </span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Type:</span>
-                                            <span>{detailsProperty.type}</span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Added on:</span>
-                                            <span>{new Date(detailsProperty.created_at).toLocaleDateString()}</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                          </DialogContent>
-                        </Dialog>
                         {/* Add Photos Dialog */}
                         <Dialog open={showImagesDialog} onOpenChange={(open) => { setShowImagesDialog(open); if (!open) { setSelectedPropertyForImages(null); if (appendImagesInputRef.current) appendImagesInputRef.current.value = ""; } }}>
                           <DialogContent className="max-w-md">
@@ -1053,6 +775,224 @@ const OwnerDashboard = () => {
                     )}
                   </div>
                 )}
+                {/* Global Property Details Modal (works for both pending and approved) */}
+                <Dialog open={!!detailsProperty} onOpenChange={(open) => { if (!open) setDetailsProperty(null); }}>
+                  <DialogContent className="max-w-3xl">
+                    {detailsProperty && (
+                      <>
+                        <DialogHeader>
+                          <DialogTitle className="text-2xl">{detailsProperty.address_line_1}</DialogTitle>
+                          <DialogDescription>{detailsProperty.city}, {detailsProperty.state} {detailsProperty.zip_code}</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          {/* Image Gallery */}
+                          <div className="w-full bg-gray-100 rounded-lg p-2">
+                            {detailsProperty.images && detailsProperty.images.length > 0 ? (
+                              <div className="grid grid-cols-4 gap-2">
+                                <div className="col-span-3 row-span-2">
+                                  <img src={detailsProperty.images[0]} alt="Main" className="w-full h-64 object-cover rounded" />
+                                </div>
+                                {detailsProperty.images.slice(1, 5).map((img: string, idx: number) => (
+                                  <img key={idx} src={img} alt={`Property ${idx + 2}`} className="w-full h-32 object-cover rounded" />
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="w-full h-64 bg-gray-200 flex items-center justify-center text-gray-400">No Images</div>
+                            )}
+                          </div>
+                          
+                          {/* Property Info */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="bg-black text-white text-xs px-2 py-1 rounded">Company-Serviced</span>
+                                <span className="bg-green-500 text-white text-xs px-2 py-1 rounded">{detailsProperty.rating || 4.5} ★</span>
+                                <span className="text-xs text-muted-foreground">({detailsProperty.rating_count || 0} Ratings)</span>
+                              </div>
+                              <h3 className="font-bold text-xl mb-2">₹{detailsProperty.price_per_room || 0}<span className="text-sm font-normal text-muted-foreground">/room/month</span></h3>
+                              <div className="text-sm text-muted-foreground mb-4">
+                                {detailsProperty.type} • {detailsProperty.zip_code}
+                              </div>
+                              
+                              {/* Amenities */}
+                              <div className="mb-4">
+                                <h4 className="font-semibold mb-2">Amenities</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {detailsProperty.wifi_available && <span className="flex items-center gap-1 text-xs bg-blue-100 px-2 py-1 rounded">WiFi</span>}
+                                  {detailsProperty.amenities && Object.keys(detailsProperty.amenities).map((am, idx) => (
+                                    detailsProperty.amenities[am] ? (
+                                      <span key={idx} className="flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded">
+                                        {am.charAt(0).toUpperCase() + am.slice(1)}
+                                      </span>
+                                    ) : null
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              {/* Timings */}
+                              {detailsProperty.timings && (
+                                <div className="mb-4">
+                                  <h4 className="font-semibold mb-1">Timings</h4>
+                                  <p className="text-sm text-muted-foreground">{detailsProperty.timings}</p>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div>
+                              {/* Description */}
+                              {detailsProperty.custom_specs?.description && (
+                                <div className="mb-4">
+                                  <h4 className="font-semibold mb-2">Description</h4>
+                                  <p className="text-sm text-muted-foreground">{detailsProperty.custom_specs.description}</p>
+                                </div>
+                              )}
+                              
+                              {/* Property Stats */}
+                              <div className="border rounded-lg p-3">
+                                <h4 className="font-semibold mb-2">Property Details</h4>
+                                <div className="space-y-2 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Status:</span>
+                                    <span className={detailsProperty.is_approved ? "text-green-600" : "text-yellow-600"}>
+                                      {detailsProperty.is_approved ? "Approved" : "Pending Approval"}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Type:</span>
+                                    <span>{detailsProperty.type}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Added on:</span>
+                                    <span>{new Date(detailsProperty.created_at).toLocaleDateString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </DialogContent>
+                </Dialog>
+
+                {/* Global Edit Property Dialog */}
+                <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+                  <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Edit Property Details</DialogTitle>
+                      <DialogDescription>Updates require admin re-approval.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      {/* Existing Images */}
+                      {propertyImages.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Current Images</Label>
+                          <div className="grid grid-cols-3 gap-3">
+                            {propertyImages.map((img, idx) => (
+                              <div key={idx} className="relative group">
+                                <img
+                                  src={img}
+                                  alt={`Property ${idx + 1}`}
+                                  className="w-full h-32 object-cover rounded-lg border"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveImage(idx)}
+                                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  aria-label="Remove image"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Upload New Images */}
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-images">Upload New Images</Label>
+                        <Input
+                          id="edit-images"
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          ref={imageInputRef}
+                        />
+                        <p className="text-xs text-muted-foreground">You can upload multiple images at once</p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-address">Address</Label>
+                        <Input id="edit-address" value={propertyAddress} onChange={(e) => setPropertyAddress(e.target.value)} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-city">City</Label>
+                          <Input id="edit-city" value={propertyCity} onChange={(e) => setPropertyCity(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-state">State</Label>
+                          <Input id="edit-state" value={propertyState} onChange={(e) => setPropertyState(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-zip">ZIP Code</Label>
+                        <Input id="edit-zip" value={propertyZip} onChange={(e) => setPropertyZip(e.target.value)} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Property Type</Label>
+                          <Select value={propertyType} onValueChange={(v: any) => setPropertyType(v)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Flat">Flat</SelectItem>
+                              <SelectItem value="PG">PG (Paying Guest)</SelectItem>
+                              <SelectItem value="Hostel">Hostel</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-price">Price per Room (₹)</Label>
+                          <Input id="edit-price" type="number" value={pricePerRoom} onChange={(e) => setPricePerRoom(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-description">Description</Label>
+                        <Textarea id="edit-description" rows={3} value={propertyDescription} onChange={(e) => setPropertyDescription(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-timings">Check-in/Check-out Timings</Label>
+                        <Input id="edit-timings" value={timings} onChange={(e) => setTimings(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Amenities</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={wifiAvailable} onChange={(e) => setWifiAvailable(e.target.checked)} /> WiFi</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={elevator} onChange={(e) => setElevator(e.target.checked)} /> Elevator</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={geyser} onChange={(e) => setGeyser(e.target.checked)} /> Geyser</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ac} onChange={(e) => setAc(e.target.checked)} /> AC</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={parking} onChange={(e) => setParking(e.target.checked)} /> Parking</label>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-virtual">Virtual Tour URL</Label>
+                        <Input id="edit-virtual" value={virtualTourUrl} onChange={(e) => setVirtualTourUrl(e.target.value)} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={instantBooking} onChange={(e) => setInstantBooking(e.target.checked)} /> Instant Booking</label>
+                        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} /> Featured</label>
+                      </div>
+                      <Alert>
+                        <AlertDescription>After saving, the property will be pending admin re-approval.</AlertDescription>
+                      </Alert>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => { setShowEditDialog(false); setEditingProperty(null); }}>Cancel</Button>
+                      <Button onClick={handleSaveEditedProperty}>Save Changes</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1177,6 +1117,137 @@ const OwnerDashboard = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+          {/* Add Property Dialog - Global */}
+          <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add New Property</DialogTitle>
+                <DialogDescription>
+                  Enter property details. Admin approval required.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address</Label>
+                  <Input
+                    id="address"
+                    placeholder="123 Main Street"
+                    value={propertyAddress}
+                    onChange={(e) => setPropertyAddress(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      placeholder="New York"
+                      value={propertyCity}
+                      onChange={(e) => setPropertyCity(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      placeholder="NY"
+                      value={propertyState}
+                      onChange={(e) => setPropertyState(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="zip">ZIP Code</Label>
+                  <Input
+                    id="zip"
+                    placeholder="10001"
+                    value={propertyZip}
+                    onChange={(e) => setPropertyZip(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Property Type</Label>
+                    <Select value={propertyType} onValueChange={(value: any) => setPropertyType(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Flat">Flat</SelectItem>
+                        <SelectItem value="PG">PG (Paying Guest)</SelectItem>
+                        <SelectItem value="Hostel">Hostel</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Price per Room (₹)</Label>
+                    <Input id="price" type="number" value={pricePerRoom} onChange={(e) => setPricePerRoom(e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="num-rooms">Number of Rooms</Label>
+                    <Input id="num-rooms" type="number" min="1" value={numberOfRooms} onChange={(e) => setNumberOfRooms(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="beds-room">Beds per Room</Label>
+                    <Input id="beds-room" type="number" min="1" value={bedsPerRoom} onChange={(e) => setBedsPerRoom(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea id="description" rows={3} value={propertyDescription} onChange={(e) => setPropertyDescription(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="timings">Check-in/Check-out Timings</Label>
+                  <Input id="timings" value={timings} onChange={(e) => setTimings(e.target.value)} placeholder="e.g., Check-in: 2 PM, Check-out: 11 AM" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Amenities</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={wifiAvailable} onChange={(e) => setWifiAvailable(e.target.checked)} /> WiFi</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={elevator} onChange={(e) => setElevator(e.target.checked)} /> Elevator</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={geyser} onChange={(e) => setGeyser(e.target.checked)} /> Geyser</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ac} onChange={(e) => setAc(e.target.checked)} /> AC</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={parking} onChange={(e) => setParking(e.target.checked)} /> Parking</label>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="virtual">Virtual Tour URL (optional)</Label>
+                  <Input id="virtual" value={virtualTourUrl} onChange={(e) => setVirtualTourUrl(e.target.value)} placeholder="https://..." />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={instantBooking} onChange={(e) => setInstantBooking(e.target.checked)} /> Instant Booking</label>
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} /> Featured</label>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="images">Upload Images</Label>
+                  <Input
+                    id="images"
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    ref={imageInputRef}
+                  />
+                  <div className="flex gap-2 flex-wrap mt-2">
+                    {propertyImages.map((img, idx) => (
+                      <img key={idx} src={img} alt="Property" className="h-16 w-16 object-cover rounded" />
+                    ))}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowPropertyDialog(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleAddProperty}>
+                    Add Property
+                  </Button>
+                </DialogFooter>
+              </div>
+            </DialogContent>
+          </Dialog>
+
       </div>
     </DashboardLayout>
   );

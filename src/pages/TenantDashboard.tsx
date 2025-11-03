@@ -1111,7 +1111,10 @@ const TenantDashboard = () => {
                           {/* Neighborhood Guide */}
                           <div className="space-y-4">
                             <NeighborhoodGuide
-                              propertyAddress={`${detailsProperty.address}, ${detailsProperty.city}`}
+                              address={detailsProperty.address || detailsProperty.address_line_1 || ""}
+                              city={detailsProperty.city || ""}
+                              state={detailsProperty.state || ""}
+                              zip={detailsProperty.zip_code || ""}
                             />
                           </div>
 

@@ -1,12 +1,18 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, Star, Share2, BookmarkPlus, Eye, Users, BadgeCheck } from "lucide-react";
+import { Heart, Star, Share2, BookmarkPlus, Eye, Users, BadgeCheck, MoreVertical, Building2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Property = Tables<"properties"> & {
   rooms?: Tables<"rooms">[];
@@ -19,9 +25,18 @@ interface PropertyCardProps {
   showActions?: boolean;
   isFavorite?: boolean;
   onToggleFavorite?: (propertyId: string) => void;
+  viewLabel?: string;
+  applyLabel?: string;
+  statusBadgeText?: string;
+  viewIcon?: ReactNode;
+  applyIcon?: ReactNode;
+  secondaryClassName?: string; // extra classes for the left (view) button
+  primaryClassName?: string;   // extra classes for the right (apply) button
+  disableHoverScale?: boolean;  // turn off outer hover scale to avoid overlap in tight grids
+  cardClassName?: string;       // allow callers to enforce min-height or other container tweaks
 }
 
-export function PropertyCard({ property, onApply, onView, showActions = true, isFavorite = false, onToggleFavorite }: PropertyCardProps) {
+export function PropertyCard({ property, onApply, onView, showActions = true, isFavorite = false, onToggleFavorite, viewLabel = "View Details", applyLabel = "Book Now", statusBadgeText, viewIcon, applyIcon, secondaryClassName, primaryClassName, disableHoverScale = false, cardClassName }: PropertyCardProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [viewCount] = useState(() => Math.floor(Math.random() * 15) + 3); // Simulated view count
@@ -110,7 +125,7 @@ export function PropertyCard({ property, onApply, onView, showActions = true, is
   });
 
   return (
-    <Card className="group bg-white rounded-xl shadow-md hover:shadow-xl ring-1 ring-border hover:ring-primary/20 transition-all duration-300 overflow-hidden flex flex-col h-full transform hover:scale-[1.01] active:scale-[.99]">
+    <Card className={`group bg-white rounded-xl shadow-md hover:shadow-xl ring-1 ring-border hover:ring-primary/20 transition-all duration-300 overflow-hidden flex flex-col h-full${disableHoverScale ? '' : ' transform hover:scale-[1.01] active:scale-[.99]'} ${cardClassName || ''}`}>
       {/* Cover Image */}
       <div className="relative h-48 bg-gray-100 overflow-hidden">
         {property.images && property.images.length > 0 ? (
@@ -130,9 +145,57 @@ export function PropertyCard({ property, onApply, onView, showActions = true, is
             No Image
           </div>
         )}
+        {/* Status Badge (e.g., Approved / Pending) */}
+        {statusBadgeText && (
+          <div className="absolute top-3 left-3 bg-white/95 backdrop-blur rounded-full px-3 py-1 shadow-md text-xs font-medium">
+            {statusBadgeText}
+          </div>
+        )}
         
         {/* Top Right Actions */}
         <div className="absolute top-3 right-3 flex gap-2">
+          {/* Three Dot Menu for Owner Actions */}
+          {showActions && (onView || onApply) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Property actions"
+                  className="rounded-full p-2 bg-white/90 backdrop-blur text-gray-700 shadow-lg hover:scale-110 transition-transform"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {onView && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onView(property.property_id);
+                    }}
+                    className="cursor-pointer"
+                  >
+                    {viewIcon}
+                    <span className="ml-2">{viewLabel}</span>
+                  </DropdownMenuItem>
+                )}
+                {onApply && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onApply(property.property_id);
+                    }}
+                    className="cursor-pointer"
+                  >
+                    {applyIcon}
+                    <span className="ml-2">{applyLabel}</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          
           <button
             type="button"
             aria-label="Share property"
@@ -173,8 +236,8 @@ export function PropertyCard({ property, onApply, onView, showActions = true, is
         </div>
       </div>
 
-      {/* Content */}
-      <div className="p-4 flex flex-col flex-1">
+  {/* Content */}
+  <div className="p-4 pb-5 flex flex-col flex-1">
         {/* Badges Row */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="text-[10px] px-2.5 py-1 rounded-full bg-black text-white font-semibold flex items-center gap-1">
@@ -229,39 +292,14 @@ export function PropertyCard({ property, onApply, onView, showActions = true, is
           </div>
         )}
 
-        {/* Spacer to push price and buttons to bottom */}
+        {/* Spacer to push price to bottom */}
         <div className="flex-1"></div>
 
         {/* Price */}
-        <div className="mb-3">
+        <div>
           <div className="font-bold text-xl text-primary">{formatINR(price)}</div>
           <div className="text-xs text-gray-500">per room per month</div>
         </div>
-
-        {/* Action Buttons */}
-        {showActions && (onView || onApply) && (
-          <div className="flex gap-2" onMouseEnter={prefetchDetails} onFocus={prefetchDetails}>
-            {onView && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 h-9 text-sm font-medium"
-                onClick={() => onView(property.property_id)}
-              >
-                View Details
-              </Button>
-            )}
-            {onApply && (
-              <Button
-                size="sm"
-                className="flex-1 h-9 text-sm font-bold btn-gradient text-white"
-                onClick={() => onApply(property.property_id)}
-              >
-                Book Now
-              </Button>
-            )}
-          </div>
-        )}
       </div>
     </Card>
   );
