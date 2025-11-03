@@ -24,17 +24,17 @@ const OVERPASS_BASE = "https://overpass-api.de/api/interpreter";
 // Resolve address to lat/lng using free Nominatim geocoding
 export async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    const res = await fetch(
-      `${NOMINATIM_BASE}/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
-      {
-        headers: {
-          // Required by Nominatim usage policy
-          "User-Agent": "TenantTownCentral/1.0",
-        },
-      }
-    );
+    const url = `${NOMINATIM_BASE}/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
+    console.log("geocodeAddress: Fetching", url);
+    const res = await fetch(url, {
+      headers: {
+        // Required by Nominatim usage policy
+        "User-Agent": "TenantTownCentral/1.0",
+      },
+    });
     if (!res.ok) throw new Error(`geocode failed: ${res.status}`);
     const data = await res.json();
+    console.log("geocodeAddress: Response", data);
     if (data && data[0]?.lat && data[0]?.lon) {
       return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
     }
@@ -103,6 +103,7 @@ async function searchNearbyByCategory(
   `;
 
   try {
+    console.log(`searchNearbyByCategory: Searching ${category} near ${lat},${lng}`);
     const res = await fetch(OVERPASS_BASE, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -110,6 +111,7 @@ async function searchNearbyByCategory(
     });
     if (!res.ok) throw new Error(`overpass failed: ${res.status}`);
     const data = await res.json();
+    console.log(`searchNearbyByCategory: ${category} found ${data?.elements?.length || 0} results`);
 
     const results: NearbyPlaceData[] = [];
     for (const elem of data?.elements || []) {

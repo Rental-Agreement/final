@@ -8,6 +8,7 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
+    /* Original Blue Theme */
     --background: 210 25% 98%;
     --foreground: 222 47% 11%;
 
@@ -17,24 +18,31 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
+    /* Primary: Bright Blue */
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
 
+    /* Secondary: Light Gray */
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
 
+    /* Success: Green */
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
 
+    /* Warning: Amber */
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
+    /* Muted: Light Gray */
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
+    /* Accent: Light Blue */
     --accent: 210 40% 96%;
     --accent-foreground: 222 47% 11%;
 
+    /* Destructive: Red */
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
@@ -44,29 +52,24 @@ All colors MUST be HSL.
 
     --radius: 0.75rem;
 
+    /* Original Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(221 83% 63%) 100%);
     --gradient-hero: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(262 83% 58%) 100%);
     --shadow-card: 0 2px 8px -2px hsl(221 83% 53% / 0.1);
     --shadow-elevated: 0 8px 16px -4px hsl(221 83% 53% / 0.15);
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
+    /* Original Dark Mode */
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
 
@@ -76,30 +79,38 @@ All colors MUST be HSL.
     --popover: 217 33% 17%;
     --popover-foreground: 210 40% 98%;
 
+    /* Primary: Bright Blue */
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
 
+    /* Secondary: Dark Gray */
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
 
+    /* Success: Green */
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
 
+    /* Warning: Amber */
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
+    /* Muted: Dark Gray */
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
 
+    /* Accent: Dark Blue */
     --accent: 217 33% 17%;
     --accent-foreground: 210 40% 98%;
 
+    /* Destructive: Dark Red */
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 217 33% 17%;
     --input: 217 33% 17%;
     --ring: 221 83% 53%;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -141,7 +152,26 @@ All colors MUST be HSL.
     background-image: linear-gradient(135deg, hsl(221 83% 53%), hsl(262 83% 58%));
     color: white;
   }
-  .btn-gradient:hover { filter: brightness(1.05); }
+  .btn-gradient:hover { 
+    filter: brightness(1.05);
+  }
+
+  .gradient-bg {
+    background-image: linear-gradient(135deg, hsl(221 83% 53%), hsl(262 83% 58%));
+    color: white;
+  }
+  .gradient-bg:hover { 
+    filter: brightness(1.05);
+  }
+
+  .btn-gradient-accent {
+    background-image: linear-gradient(135deg, hsl(221 83% 53%), hsl(262 83% 58%));
+    color: white;
+    font-weight: 600;
+  }
+  .btn-gradient-accent:hover { 
+    filter: brightness(1.1);
+  }
 
   .glass {
     @apply bg-white/60 dark:bg-white/10 backdrop-blur-md border border-white/30 shadow-lg;

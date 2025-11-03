@@ -55,6 +55,7 @@ import { TransportationScore } from "@/components/TransportationScore";
 import { SimilarPropertiesCarousel } from "@/components/SimilarPropertiesCarousel";
 import { PropertyQA } from "@/components/PropertyQA";
 import { BookingTimeline } from "@/components/BookingTimeline";
+import { usePropertyLocation } from "@/hooks/use-property-location";
 
 const TenantDashboard = () => {
   const { profile } = useAuth();
@@ -234,6 +235,23 @@ const TenantDashboard = () => {
   const createReview = useCreateReview();
   const [newRating, setNewRating] = useState<string>("");
   const [newComment, setNewComment] = useState<string>("");
+  
+  // Auto-fetch location data when property is selected
+  const { 
+    amenities: autoFetchedAmenities, 
+    isLoading: locationLoading,
+    isCached: isLocationCached 
+  } = usePropertyLocation(
+    detailsProperty?.property_id || "",
+    detailsProperty?.address || "",
+    detailsProperty?.city || "",
+    detailsProperty?.state || "",
+    detailsProperty?.zip_code || ""
+  );
+  
+  // Use auto-fetched amenities if property doesn't have them
+  const propertyAmenities = detailsProperty?.nearby_amenities || autoFetchedAmenities;
+  
   // Add/remove favorite logic
   const handleToggleFavorite = async (propertyId: string) => {
     if (!profile?.user_id) return;
@@ -979,9 +997,13 @@ const TenantDashboard = () => {
                             </div>
                           </div>
 
-                          {/* Location & Nearby */}
+                          {/* Location & Nearby - Auto-fetches from Google Maps */}
                           <div>
-                            <h2 className="text-xl sm:text-2xl font-bold mb-4">Location</h2>
+                            <h2 className="text-xl sm:text-2xl font-bold mb-4 flex items-center gap-2">
+                              Location
+                              {locationLoading && <span className="text-xs text-muted-foreground">(Loading nearby places...)</span>}
+                              {isLocationCached && <span className="text-xs text-green-600">✓ Verified</span>}
+                            </h2>
                             <div className="border rounded-lg p-3 sm:p-4">
                               <div className="flex items-start gap-3 mb-4">
                                 <span className="text-xl">📍</span>
@@ -990,36 +1012,77 @@ const TenantDashboard = () => {
                                   <p className="text-xs sm:text-sm text-muted-foreground">{detailsProperty.city}, {detailsProperty.state} {detailsProperty.zip_code}</p>
                                 </div>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                  <h4 className="font-semibold text-sm mb-2 text-red-600">Places to visit</h4>
-                                  <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">City Center</span>
-                                      <span className="font-medium">2.0kms</span>
+                              
+                              {/* Dynamic Nearby Places - Auto-fetched from Google Maps */}
+                              {propertyAmenities ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                  <div>
+                                    <h4 className="font-semibold text-sm mb-2 text-primary">Essential Services</h4>
+                                    <div className="space-y-2 text-sm">
+                                      {propertyAmenities.essentials?.hospital && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">🏥 {propertyAmenities.essentials.hospital.name || 'Hospital'}</span>
+                                          <span className="font-medium">{propertyAmenities.essentials.hospital.distance}km</span>
+                                        </div>
+                                      )}
+                                      {propertyAmenities.essentials?.mall && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">🛍️ {propertyAmenities.essentials.mall.name || 'Shopping Mall'}</span>
+                                          <span className="font-medium">{propertyAmenities.essentials.mall.distance}km</span>
+                                        </div>
+                                      )}
+                                      {propertyAmenities.essentials?.school && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">🎓 {propertyAmenities.essentials.school.name || 'School'}</span>
+                                          <span className="font-medium">{propertyAmenities.essentials.school.distance}km</span>
+                                        </div>
+                                      )}
+                                      {propertyAmenities.essentials?.police && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">👮 {propertyAmenities.essentials.police.name || 'Police Station'}</span>
+                                          <span className="font-medium">{propertyAmenities.essentials.police.distance}km</span>
+                                        </div>
+                                      )}
                                     </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Railway Station</span>
-                                      <span className="font-medium">4.8kms</span>
+                                  </div>
+                                  <div>
+                                    <h4 className="font-semibold text-sm mb-2">Transportation</h4>
+                                    <div className="space-y-2 text-sm">
+                                      {propertyAmenities.transportation?.metro && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">🚇 {propertyAmenities.transportation.metro.name || 'Metro Station'}</span>
+                                          <span className="font-medium">{propertyAmenities.transportation.metro.distance}km</span>
+                                        </div>
+                                      )}
+                                      {propertyAmenities.transportation?.bus_stop && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">🚌 {propertyAmenities.transportation.bus_stop.name || 'Bus Stop'}</span>
+                                          <span className="font-medium">{propertyAmenities.transportation.bus_stop.distance}km</span>
+                                        </div>
+                                      )}
+                                      {propertyAmenities.transportation?.railway && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">🚂 {propertyAmenities.transportation.railway.name || 'Railway Station'}</span>
+                                          <span className="font-medium">{propertyAmenities.transportation.railway.distance}km</span>
+                                        </div>
+                                      )}
+                                      {propertyAmenities.transportation?.airport && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">✈️ {propertyAmenities.transportation.airport.name || 'Airport'}</span>
+                                          <span className="font-medium">{propertyAmenities.transportation.airport.distance}km</span>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
-                                <div>
-                                  <h4 className="font-semibold text-sm mb-2">Transportation</h4>
-                                  <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Bus Stop</span>
-                                      <span className="font-medium">0.5kms</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Airport</span>
-                                      <span className="font-medium">15kms</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground mb-4">
+                                  Loading nearby places information...
+                                </p>
+                              )}
+                              
                               <a
-                                className="text-sm text-red-600 font-medium hover:underline inline-flex items-center gap-1"
+                                className="text-sm text-primary font-medium hover:underline inline-flex items-center gap-1"
                                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(detailsProperty.address + ', ' + detailsProperty.city + ', ' + detailsProperty.state + ' ' + detailsProperty.zip_code)}`}
                                 target="_blank"
                                 rel="noreferrer"
@@ -1029,16 +1092,22 @@ const TenantDashboard = () => {
                             </div>
                           </div>
 
-                          {/* House Rules */}
+                          {/* House Rules - Now Dynamic from Database */}
                           <div>
                             <h2 className="text-xl sm:text-2xl font-bold mb-4">House Rules</h2>
-                            <ul className="list-disc list-inside space-y-2 text-sm sm:text-base text-muted-foreground">
-                              <li>Government ID required at check-in</li>
-                              <li>No smoking in rooms</li>
-                              <li>Pets not allowed</li>
-                              <li>Quiet hours: 10 PM - 6 AM</li>
-                              {detailsProperty.timings && <li>Check-in/out: {detailsProperty.timings}</li>}
-                            </ul>
+                            {detailsProperty.house_rules ? (
+                              <div className="text-sm sm:text-base text-muted-foreground whitespace-pre-line">
+                                {detailsProperty.house_rules}
+                              </div>
+                            ) : (
+                              <ul className="list-disc list-inside space-y-2 text-sm sm:text-base text-muted-foreground">
+                                <li>Government ID required at check-in</li>
+                                <li>No smoking in rooms</li>
+                                <li>Pets not allowed</li>
+                                <li>Quiet hours: 10 PM - 6 AM</li>
+                                {detailsProperty.timings && <li>Check-in/out: {detailsProperty.timings}</li>}
+                              </ul>
+                            )}
                           </div>
 
                           {/* Reviews */}

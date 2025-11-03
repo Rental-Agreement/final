@@ -24,33 +24,6 @@ interface NeighborhoodGuideProps {
   }>;
 }
 
-// Mock data generator
-const generateMockPlaces = () => {
-  const restaurants = [
-    { name: "The Spice Route", type: "restaurant" as const, distance: "0.3 km", rating: 4.5, reviews: 234, address: "MG Road", lat: undefined, lng: undefined },
-    { name: "Cafe Italiano", type: "restaurant" as const, distance: "0.5 km", rating: 4.2, reviews: 189, address: "Brigade Road", lat: undefined, lng: undefined },
-    { name: "Tandoor Nights", type: "restaurant" as const, distance: "0.8 km", rating: 4.7, reviews: 456, address: "Indiranagar", lat: undefined, lng: undefined },
-  ];
-  const cafes = [
-    { name: "Blue Tokai Coffee", type: "cafe" as const, distance: "0.2 km", rating: 4.6, reviews: 312, address: "Koramangala", lat: undefined, lng: undefined },
-    { name: "Starbucks", type: "cafe" as const, distance: "0.4 km", rating: 4.3, reviews: 523, address: "Commercial Street", lat: undefined, lng: undefined },
-  ];
-  const hospitals = [
-    { name: "Apollo Hospital", type: "hospital" as const, distance: "1.2 km", rating: 4.4, reviews: 1234, address: "Bannerghatta Road", lat: undefined, lng: undefined },
-    { name: "Fortis Healthcare", type: "hospital" as const, distance: "2.1 km", rating: 4.5, reviews: 987, address: "Cunningham Road", lat: undefined, lng: undefined },
-  ];
-  const schools = [
-    { name: "Delhi Public School", type: "school" as const, distance: "0.9 km", rating: 4.8, reviews: 456, address: "East of Kailash", lat: undefined, lng: undefined },
-    { name: "Mount Carmel School", type: "school" as const, distance: "1.5 km", rating: 4.6, reviews: 234, address: "Vasant Kunj", lat: undefined, lng: undefined },
-  ];
-  const shopping = [
-    { name: "Phoenix Marketcity", type: "shopping" as const, distance: "1.0 km", rating: 4.5, reviews: 3456, address: "Whitefield", lat: undefined, lng: undefined },
-    { name: "Lulu Mall", type: "shopping" as const, distance: "2.3 km", rating: 4.4, reviews: 2134, address: "Rajajinagar", lat: undefined, lng: undefined },
-  ];
-  
-  return [...restaurants, ...cafes, ...hospitals, ...schools, ...shopping];
-};
-
 export function NeighborhoodGuide({ address, city, state, zip, expectedCityCenter, nearbyPlaces }: NeighborhoodGuideProps) {
   const [loading, setLoading] = useState(false);
   const [dynamicPlaces, setDynamicPlaces] = useState<NearbyPlaceData[] | null>(null);
@@ -62,13 +35,25 @@ export function NeighborhoodGuide({ address, city, state, zip, expectedCityCente
     setError(null);
     setGeoWarning(null);
     // Only fetch when an address is present and no override is provided
-    if (!address || !city || !state || !zip || nearbyPlaces) return;
+    if (!address || !city || !state || !zip || nearbyPlaces) {
+      console.log("NeighborhoodGuide: Skipping fetch", { 
+        hasAddress: !!address, 
+        hasCity: !!city, 
+        hasState: !!state, 
+        hasZip: !!zip, 
+        hasNearbyPlaces: !!nearbyPlaces 
+      });
+      return;
+    }
     const fullAddress = `${address}, ${city}, ${state}, ${zip}`;
+    console.log("NeighborhoodGuide: Fetching for address:", fullAddress);
     const load = async () => {
       setLoading(true);
       try {
         // Geocode first to check location
+        console.log("NeighborhoodGuide: Geocoding address...");
         const geo = await geocodeAddress(fullAddress);
+        console.log("NeighborhoodGuide: Geocode result:", geo);
         if (!geo) throw new Error("Could not geocode address");
         // If expectedCityCenter is provided, check distance
         if (expectedCityCenter) {
@@ -77,10 +62,13 @@ export function NeighborhoodGuide({ address, city, state, zip, expectedCityCente
             setGeoWarning("Warning: The detected location is far from the expected city center. Please check the address.");
           }
         }
+        console.log("NeighborhoodGuide: Fetching nearby places...");
         const data = await fetchNeighborhoodData(fullAddress);
+        console.log("NeighborhoodGuide: Fetched places:", data?.length || 0, data);
         if (!mounted) return;
         setDynamicPlaces(data);
       } catch (e: any) {
+        console.error("NeighborhoodGuide: Error:", e);
         if (!mounted) return;
         setError(e?.message || "Failed to load nearby places");
       } finally {
@@ -94,7 +82,7 @@ export function NeighborhoodGuide({ address, city, state, zip, expectedCityCente
   const places = useMemo(() => {
     // Prefer explicitly passed data
     if (nearbyPlaces && nearbyPlaces.length > 0) return nearbyPlaces;
-    // If API key exists but returned empty/null, fall back to mock
+    // Use dynamically fetched data ONLY - NO MOCK DATA
     if (dynamicPlaces && dynamicPlaces.length > 0) {
       return dynamicPlaces.map(p => ({
         name: p.name,
@@ -107,7 +95,8 @@ export function NeighborhoodGuide({ address, city, state, zip, expectedCityCente
         lng: p.lng,
       }));
     }
-    return generateMockPlaces();
+    // Return empty array instead of mock data
+    return [];
   }, [nearbyPlaces, dynamicPlaces]);
   
   const getIcon = (type: (typeof places)[number]["type"]) => {
@@ -190,62 +179,98 @@ export function NeighborhoodGuide({ address, city, state, zip, expectedCityCente
           Neighborhood Guide
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          What's nearby {loading ? "• loading from OpenStreetMap…" : error ? "• showing sample data" : dynamicPlaces ? "• live data" : ""}
+          {loading 
+            ? "🔄 Loading nearby places from OpenStreetMap..." 
+            : error 
+              ? `❌ ${error}` 
+              : dynamicPlaces && places.length > 0
+                ? `✅ Showing ${places.length} nearby places (real data)`
+                : places.length === 0
+                  ? "No nearby places found in this area"
+                  : ""}
         </p>
         {geoWarning && (
-          <p className="text-xs text-red-600 mt-2">{geoWarning}</p>
+          <p className="text-xs text-yellow-600 mt-2 bg-yellow-50 p-2 rounded">⚠️ {geoWarning}</p>
         )}
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="all" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-            <TabsTrigger value="restaurants" className="text-xs">
-              <Utensils className="w-3 h-3 sm:mr-1" />
-              <span className="hidden sm:inline">Food</span>
-            </TabsTrigger>
-            <TabsTrigger value="cafes" className="text-xs">
-              <Coffee className="w-3 h-3 sm:mr-1" />
-              <span className="hidden sm:inline">Cafes</span>
-            </TabsTrigger>
-            <TabsTrigger value="hospitals" className="text-xs">
-              <Hospital className="w-3 h-3 sm:mr-1" />
-              <span className="hidden sm:inline">Health</span>
-            </TabsTrigger>
-            <TabsTrigger value="schools" className="text-xs">
-              <GraduationCap className="w-3 h-3 sm:mr-1" />
-              <span className="hidden sm:inline">Schools</span>
-            </TabsTrigger>
-            <TabsTrigger value="shopping" className="text-xs">
-              <ShoppingCart className="w-3 h-3 sm:mr-1" />
-              <span className="hidden sm:inline">Shop</span>
-            </TabsTrigger>
-          </TabsList>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 space-y-3">
+            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+            <p className="text-sm text-muted-foreground">Finding nearby places...</p>
+          </div>
+        ) : places.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 space-y-3">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
+              <MapPin className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              {error ? "Unable to load nearby places. Please check the property address." : "No nearby places found in this area."}
+            </p>
+          </div>
+        ) : (
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+              <TabsTrigger value="restaurants" className="text-xs">
+                <Utensils className="w-3 h-3 sm:mr-1" />
+                <span className="hidden sm:inline">Food</span>
+              </TabsTrigger>
+              <TabsTrigger value="cafes" className="text-xs">
+                <Coffee className="w-3 h-3 sm:mr-1" />
+                <span className="hidden sm:inline">Cafes</span>
+              </TabsTrigger>
+              <TabsTrigger value="hospitals" className="text-xs">
+                <Hospital className="w-3 h-3 sm:mr-1" />
+                <span className="hidden sm:inline">Health</span>
+              </TabsTrigger>
+              <TabsTrigger value="schools" className="text-xs">
+                <GraduationCap className="w-3 h-3 sm:mr-1" />
+                <span className="hidden sm:inline">Schools</span>
+              </TabsTrigger>
+              <TabsTrigger value="shopping" className="text-xs">
+                <ShoppingCart className="w-3 h-3 sm:mr-1" />
+                <span className="hidden sm:inline">Shop</span>
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="all" className="mt-4 space-y-2 max-h-96 overflow-y-auto">
-            {places.map((place, idx) => <PlaceCard key={idx} place={place} />)}
-          </TabsContent>
+            <TabsContent value="all" className="mt-4 space-y-2 max-h-96 overflow-y-auto">
+              {places.length > 0 ? places.map((place, idx) => <PlaceCard key={idx} place={place} />) : (
+                <p className="text-sm text-muted-foreground text-center py-8">No places found</p>
+              )}
+            </TabsContent>
 
-          <TabsContent value="restaurants" className="mt-4 space-y-2">
-            {filterByType("restaurant").map((place, idx) => <PlaceCard key={idx} place={place} />)}
-          </TabsContent>
+            <TabsContent value="restaurants" className="mt-4 space-y-2">
+              {filterByType("restaurant").length > 0 ? filterByType("restaurant").map((place, idx) => <PlaceCard key={idx} place={place} />) : (
+                <p className="text-sm text-muted-foreground text-center py-8">No restaurants found nearby</p>
+              )}
+            </TabsContent>
 
-          <TabsContent value="cafes" className="mt-4 space-y-2">
-            {filterByType("cafe").map((place, idx) => <PlaceCard key={idx} place={place} />)}
-          </TabsContent>
+            <TabsContent value="cafes" className="mt-4 space-y-2">
+              {filterByType("cafe").length > 0 ? filterByType("cafe").map((place, idx) => <PlaceCard key={idx} place={place} />) : (
+                <p className="text-sm text-muted-foreground text-center py-8">No cafes found nearby</p>
+              )}
+            </TabsContent>
 
-          <TabsContent value="hospitals" className="mt-4 space-y-2">
-            {filterByType("hospital").map((place, idx) => <PlaceCard key={idx} place={place} />)}
-          </TabsContent>
+            <TabsContent value="hospitals" className="mt-4 space-y-2">
+              {filterByType("hospital").length > 0 ? filterByType("hospital").map((place, idx) => <PlaceCard key={idx} place={place} />) : (
+                <p className="text-sm text-muted-foreground text-center py-8">No hospitals found nearby</p>
+              )}
+            </TabsContent>
 
-          <TabsContent value="schools" className="mt-4 space-y-2">
-            {filterByType("school").map((place, idx) => <PlaceCard key={idx} place={place} />)}
-          </TabsContent>
+            <TabsContent value="schools" className="mt-4 space-y-2">
+              {filterByType("school").length > 0 ? filterByType("school").map((place, idx) => <PlaceCard key={idx} place={place} />) : (
+                <p className="text-sm text-muted-foreground text-center py-8">No schools found nearby</p>
+              )}
+            </TabsContent>
 
-          <TabsContent value="shopping" className="mt-4 space-y-2">
-            {filterByType("shopping").map((place, idx) => <PlaceCard key={idx} place={place} />)}
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="shopping" className="mt-4 space-y-2">
+              {filterByType("shopping").length > 0 ? filterByType("shopping").map((place, idx) => <PlaceCard key={idx} place={place} />) : (
+                <p className="text-sm text-muted-foreground text-center py-8">No shopping centers found nearby</p>
+              )}
+            </TabsContent>
+          </Tabs>
+        )}
       </CardContent>
     </Card>
   );
